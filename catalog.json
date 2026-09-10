@@ -1,7 +1,7 @@
 {
   "source": "static-admin-export",
   "version": 1,
-  "updatedAt": "2026-09-10T23:56:14+08:00",
+  "updatedAt": "2026-09-11T00:01:22+08:00",
   "categories": [
     {
       "id": "c01",
@@ -598,34 +598,6 @@
           "scene": "",
           "notice": "",
           "company": "平安学平险 25%",
-          "feature": "",
-          "insurer": "",
-          "premium": "",
-          "highlight": ""
-        },
-        {
-          "id": "c07-p05",
-          "area": "",
-          "name": "平安e家驾乘意外险2020版(客车版)",
-          "note": "",
-          "image": "images/c07-p05-962879.jpg",
-          "scene": "",
-          "notice": "",
-          "company": "",
-          "feature": "",
-          "insurer": "",
-          "premium": "",
-          "highlight": ""
-        },
-        {
-          "id": "c07-p06",
-          "area": "",
-          "name": "平安e家驾乘意外险2020版(货车版)",
-          "note": "",
-          "image": "images/c07-p06-962879.jpg",
-          "scene": "",
-          "notice": "",
-          "company": "",
           "feature": "",
           "insurer": "",
           "premium": "",
