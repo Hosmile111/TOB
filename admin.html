@@ -179,7 +179,7 @@ button,input,textarea{font-family:inherit}
 <div id="passModal" class="modal" style="display:none">
   <div class="modal-box">
     <h3>🔑 手续费查看密码</h3>
-    <p class="m-sub">生成 5-6 位数字密码发给不同人群，对方在前台「手续费」开关输入即可查看对应费率的<b>那一条手续费</b>（不会看到其他）。<br>设置对应人群：
+    <p class="m-sub">点「＋ 生成新密码」自动生成 5-6 位数字，<b>也可直接在密码框里改成自定义数字</b>；对方在前台滑动开关输入即可查看对应费率的<b>那一条手续费</b>（不会看到其他）。<br>设置对应人群：
       <b>业务员</b>密码 → 只看业务员费率 / <b>客户</b>密码 → 只看客户费率 / <b>渠道</b>密码 → 只看渠道费率 / <b>全部</b>密码 → 三条都看（管理员校验用）。<br>
       后台录入「渠道费用」时，业务员会自动=渠道-5、客户自动=业务员-3；这两项也可自由修改。<br>
       最多 10 组；把某组设为「失效」后，用过它的人刷新页面会自动重新锁定。</p>
@@ -212,14 +212,17 @@ function toast(msg, kind){
 }
 function markDirty(){ dirty=true; $('#dirtyTip').textContent='● 修改中…'; scheduleSave(); }
 let saveTimer, syncTimer;
+const LS_WORK_TS = 'fxy_admin_work_ts';
+function saveWorkDraft(){
+  try{ localStorage.setItem(LS_WORK, JSON.stringify(DB)); localStorage.setItem(LS_WORK_TS, String(Date.now())); }catch(e){}
+}
 function scheduleSave(){
   clearTimeout(saveTimer);
-  saveTimer=setTimeout(()=>{
-    try{ localStorage.setItem(LS_WORK, JSON.stringify(DB)); }catch(e){}
-  },400);
+  saveTimer=setTimeout(saveWorkDraft, 400);
   scheduleAutoSync();
 }
 /* 实时同步：停止修改约 5 秒后自动推送到 Supabase，前台刷新即可看到，无需手动点发布 */
+let _syncRetry = 0;
 function scheduleAutoSync(){
   clearTimeout(syncTimer);
   syncTimer=setTimeout(async ()=>{
@@ -227,9 +230,16 @@ function scheduleAutoSync(){
     try{
       if(tip) tip.textContent='● 正在同步到线上…';
       await pushToSupabase();
+      _syncRetry = 0;
       if(tip) tip.textContent='● 已同步 · 前台刷新即可看到';
     }catch(e){
-      if(tip) tip.textContent='● 已存本机（自动同步失败，请检查网络或刷新重试）';
+      if(_syncRetry < 5){
+        _syncRetry++;
+        if(tip) tip.textContent='● 已存本机（同步失败，15 秒后自动重试 '+_syncRetry+'/5）';
+        syncTimer=setTimeout(scheduleAutoSync, 15000);
+      }else{
+        if(tip) tip.textContent='● 已存本机（多次同步失败，请点「💾 保存并同步」重试）';
+      }
     }
   },5000);
 }
@@ -350,8 +360,18 @@ async function initAdmin(){
     try{
       const local = JSON.parse(saved);
       if(local && (local.categories||[]).length){
-        DB = local;
-        toast('已恢复本机未发布的修改','ok');
+        // 只有本机草稿比线上数据更新时才恢复——防止旧草稿覆盖线上新修改（内容丢失的根源）
+        let localTs=0; try{ localTs=parseInt(localStorage.getItem(LS_WORK_TS)||'0',10)||0; }catch(e){}
+        let sbTs=0;    try{ sbTs=DB.updatedAt?new Date(DB.updatedAt).getTime():0; }catch(e){}
+        if(!sbTs || localTs>sbTs){
+          DB = local;
+          toast('已恢复本机未同步的修改，正在推送到线上…','ok');
+          scheduleAutoSync();
+        }else{
+          // 线上是更新的版本：丢弃本机旧草稿，避免覆盖丢数据
+          localStorage.removeItem(LS_WORK);
+          localStorage.removeItem(LS_WORK_TS);
+        }
       }
     }catch(e){}
   }
@@ -640,8 +660,8 @@ $('#logoutBtn').onclick=()=>{ if(!dirty||confirm('有未保存的修改，确定
 $('#saveBtn').onclick=async ()=>{
   const btn=$('#saveBtn'); const old=btn.textContent;
   btn.disabled=true; btn.textContent='同步中…';
-  // 1) 强制刷盘 LS_WORK（草稿）
-  try{ localStorage.setItem(LS_WORK, JSON.stringify(DB)); }catch(e){}
+  // 1) 强制刷盘 LS_WORK（草稿，含时间戳）
+  saveWorkDraft();
   // 2) 同步到 Supabase
   try{
     await pushToSupabase();
@@ -739,7 +759,7 @@ function renderPass(){
       const on = (x.enabled !== false);
       const aud = x.audience || 'both';
       h += '<div class="prow">'+
-           '<input class="pcode" value="'+esc(x.code)+'" readonly>'+
+           '<input class="pcode" data-pcode="'+i+'" value="'+esc(x.code)+'" maxlength="10" placeholder="可自定义">'+
            '<input class="plabel" data-pi="'+i+'" placeholder="人群备注（如：中介A组）" value="'+esc(x.label||'')+'">'+
            '<select class="paud" data-paud="'+i+'">'+
              '<option value="both"'+(aud==='both'?' selected':'')+'>全部</option>'+
@@ -781,6 +801,23 @@ $('#passList').addEventListener('click',e=>{
 $('#passList').addEventListener('input',e=>{
   const el=e.target.closest('[data-pi]');
   if(el){ ensurePass()[+el.dataset.pi].label = el.value; markDirty(); return; }
+  const pc=e.target.closest('[data-pcode]');
+  if(pc){
+    // 密码可自定义：只保留数字，实时查重提示
+    const digits = pc.value.replace(/\D/g,'');
+    if(digits !== pc.value) pc.value = digits;
+    const arr = ensurePass(); const i = +pc.dataset.pcode;
+    if(arr[i]){
+      arr[i].code = digits;
+      if(digits && arr.some((x,j)=>j!==i && x.code===digits)){
+        pc.style.borderColor='#b82020'; pc.title='该密码与其他组重复';
+      }else{
+        pc.style.borderColor=''; pc.title='';
+      }
+      markDirty();
+    }
+    return;
+  }
   const au=e.target.closest('[data-paud]');
   if(au){ ensurePass()[+au.dataset.paud].audience = au.value; markDirty(); return; }
 });
