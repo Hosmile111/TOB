@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>后台管理 · 非车险产品目录（纯静态版）</title>
+<style>
+:root{--bg:#f3f5f8;--line:#e2e7ee;--txt:#1b2430;--muted:#6b7a8d;--brand:#1d4d8a}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--bg);color:var(--txt);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;font-size:14px;line-height:1.6}
+button,input,textarea{font-family:inherit}
+
+/* 登录 */
+.login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.login-box{background:#fff;border-radius:12px;box-shadow:0 10px 40px rgba(16,32,64,.12);padding:32px;width:min(380px,94vw)}
+.login-box h2{margin:0 0 6px;font-size:20px;text-align:center}
+.login-box .sub{text-align:center;color:var(--muted);font-size:12.5px;margin-bottom:22px}
+.login-box label{display:block;font-size:12px;color:var(--muted);font-weight:600;margin-bottom:5px}
+.login-box input{width:100%;border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-size:14px;outline:none;margin-bottom:14px}
+.login-box input:focus{border-color:var(--brand);box-shadow:0 0 0 3px rgba(29,78,216,.1)}
+.btn{width:100%;background:var(--brand);color:#fff;border:0;border-radius:8px;padding:11px;font-size:14px;font-weight:600;cursor:pointer}
+.btn:hover{background:#0f3a72}
+.login-err{background:#fdecec;color:#b91c1c;font-size:12.5px;padding:9px 12px;border-radius:7px;margin-bottom:14px;display:none}
+
+/* 顶栏 */
+.topbar{background:#1d4d8a;color:#fff;padding:12px 20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;position:sticky;top:0;z-index:50}
+.topbar h1{margin:0;font-size:17px;font-weight:700}
+.topbar .spacer{flex:1}
+.topbar button{background:rgba(255,255,255,.14);color:#fff;border:1px solid rgba(255,255,255,.28);padding:7px 14px;border-radius:7px;font-size:13px;cursor:pointer}
+.topbar button:hover{background:rgba(255,255,255,.26)}
+.topbar button.primary{background:#fff;color:#1d4d8a;font-weight:700;border-color:#fff}
+.topbar button.primary:hover{background:#eaf0ff}
+.dirty{font-size:12px;color:#ffd7a8}
+
+/* 主体 */
+.main{display:flex;gap:0;min-height:calc(100vh - 56px);align-items:flex-start}
+.side{width:210px;flex-shrink:0;background:#fff;border-right:1px solid var(--line);padding:14px 0;position:sticky;top:56px;max-height:calc(100vh - 56px);overflow:auto}
+.side .st{font-size:11px;color:#93a1b3;padding:0 16px 8px;font-weight:600;letter-spacing:.5px}
+.side a{display:flex;align-items:center;gap:8px;padding:9px 16px;color:#3d4b5e;text-decoration:none;font-size:13.5px;cursor:pointer;border-left:3px solid transparent}
+.side a:hover{background:#f6f8fb}
+.side a.on{background:#eaf0ff;color:#1d4d8a;font-weight:700;border-left-color:#1d4d8a}
+.side a .n{margin-left:auto;font-size:11px;color:#93a1b3;background:#f1f4f9;padding:1px 7px;border-radius:10px}
+.content{flex:1;padding:20px;min-width:0}
+
+/* 产品编辑卡 */
+.pcard{background:#fff;border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:14px;box-shadow:0 1px 2px rgba(16,32,64,.04)}
+.pcard .hd{display:flex;align-items:center;gap:8px;margin-bottom:12px;padding-bottom:10px;border-bottom:1px dashed var(--line)}
+.pcard .hd .idx{background:#1d4d8a;color:#fff;width:24px;height:24px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0}
+.pcard .hd .t{font-weight:700;font-size:14px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pcard .hd button{background:#fff;border:1px solid var(--line);color:var(--muted);width:28px;height:28px;border-radius:6px;cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center}
+.pcard .hd button:hover{border-color:#1d4d8a;color:#1d4d8a}
+.pcard .hd button.del:hover{border-color:#b82020;color:#b82020}
+
+.pbody{display:flex;gap:16px;flex-wrap:wrap}
+.imgbox{flex-shrink:0;width:190px}
+.imgbox .prev{width:190px;height:142px;border:1.5px dashed #cdd6e2;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#aab4c4;font-size:12px;cursor:pointer;overflow:hidden;background:#fafbfd;flex-direction:column;gap:4px}
+.imgbox .prev img{width:100%;height:100%;object-fit:contain}
+.imgbox .prev .ic{font-size:26px;opacity:.6}
+.imgbox .ops{display:flex;gap:6px;margin-top:7px}
+.imgbox .ops button{flex:1;border:1px solid var(--line);background:#fff;padding:5px;border-radius:6px;font-size:12px;color:var(--muted);cursor:pointer}
+.imgbox .ops button:hover{border-color:#1d4d8a;color:#1d4d8a}
+.imgbox .ops button.rm:hover{border-color:#b82020;color:#b82020}
+
+.fields{flex:1;min-width:260px;display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:700px){.fields{grid-template-columns:1fr}}
+.fields .f{display:flex;flex-direction:column}
+.fields .f.full{grid-column:1/-1}
+.fields label{font-size:11.5px;color:var(--muted);font-weight:600;margin-bottom:4px}
+.fields input,.fields textarea{border:1px solid var(--line);border-radius:7px;padding:7px 10px;font-size:13px;outline:none;width:100%;resize:vertical}
+.fields input:focus,.fields textarea:focus{border-color:#1d4d8a;box-shadow:0 0 0 3px rgba(29,78,216,.1)}
+.fields textarea{min-height:62px}
+
+.addbtn{width:100%;border:1.5px dashed #cdd6e2;background:#fff;color:var(--muted);padding:13px;border-radius:10px;font-size:13.5px;cursor:pointer;margin-bottom:20px}
+.addbtn:hover{border-color:#1d4d8a;color:#1d4d8a;background:#f6f9ff}
+
+.toast{position:fixed;top:70px;left:50%;transform:translateX(-50%);background:rgba(20,30,45,.93);color:#fff;padding:10px 20px;border-radius:8px;font-size:13px;z-index:999;opacity:0;transition:.2s;pointer-events:none}
+.toast.show{opacity:1}
+.toast.err{background:#b82020}
+.toast.ok{background:#0f7b4f}
+
+.hint{background:#eaf0ff;border:1px solid #cddcf7;border-radius:9px;padding:12px 15px;margin-bottom:18px;font-size:12.5px;color:#2a4f76;line-height:1.75}
+.hint b{color:#1d4d8a}
+.warn{background:#fff8ec;border:1px solid #f0d9b0;color:#7a5a1a}
+
+/* GitHub 发布弹窗 */
+.modal{position:fixed;inset:0;background:rgba(15,25,40,.5);display:flex;align-items:center;justify-content:center;z-index:999;padding:18px}
+.modal-box{background:#fff;border-radius:14px;padding:24px;width:min(460px,95vw);box-shadow:0 20px 60px rgba(0,0,0,.25);max-height:90vh;overflow:auto}
+.modal-box h3{margin:0 0 6px;font-size:18px}
+.modal-box .m-sub{font-size:12.5px;color:var(--muted);margin:0 0 16px;line-height:1.7}
+.modal-box .m-sub code{background:#eef2f8;padding:1px 6px;border-radius:4px;font-size:12px}
+.modal-box label{display:block;font-size:12px;color:var(--muted);font-weight:600;margin:12px 0 5px}
+.modal-box input{width:100%;border:1px solid var(--line);border-radius:8px;padding:9px 11px;font-size:13px;outline:none}
+.modal-box input:focus{border-color:var(--brand);box-shadow:0 0 0 3px rgba(29,78,216,.1)}
+.modal-box .m-actions{display:flex;gap:8px;margin-top:18px;flex-wrap:wrap}
+.modal-box .m-actions button{flex:1;min-width:120px;border:1px solid var(--line);background:#fff;padding:10px;border-radius:8px;font-size:13px;cursor:pointer}
+.modal-box .m-actions button.primary{background:var(--brand);color:#fff;border-color:var(--brand);font-weight:700}
+.modal-box .m-actions button.primary:hover{background:#0f3a72}
+.modal-box .m-actions button.ghost:hover{border-color:var(--brand);color:var(--brand)}
+.modal-box .m-status{margin-top:12px;font-size:12.5px;line-height:1.6;min-height:18px}
+.modal-box .m-status.ok{color:#0f7b4f}
+.modal-box .m-status.err{color:#b82020}
+.modal-box .m-status.ing{color:var(--brand)}
+</style>
+</head>
+<body>
+
+<div id="loginView" class="login-wrap" style="display:none">
+  <div class="login-box">
+    <h2>非车险产品目录</h2>
+    <div class="sub">后台管理（纯静态版）· 请登录</div>
+    <div class="login-err" id="loginErr"></div>
+    <label>管理员账号</label>
+    <input type="text" id="lu" autocomplete="username" placeholder="admin">
+    <label>密码</label>
+    <input type="password" id="lp" autocomplete="current-password" placeholder="请输入密码">
+    <button class="btn" id="loginBtn">登 录</button>
+    <div class="hint" style="margin-top:16px;margin-bottom:0">默认账号 <b>admin</b> / 密码 <b>admin888</b>。改完内容后点顶栏「☁ GitHub 发布」，即可写回仓库并自动更新线上，无需重新部署。</div>
+  </div>
+</div>
+
+<div id="adminView" style="display:none">
+  <div class="topbar">
+    <h1>⚙ 产品后台管理</h1>
+    <span class="dirty" id="dirtyTip"></span>
+    <span class="spacer"></span>
+    <button id="previewBtn">👁 预览前台</button>
+    <button id="reloadBtn">🔄 恢复云端版本</button>
+    <button id="pwdBtn">🔑 修改密码</button>
+    <button id="exportCatBtn">⬇ 导出 catalog.json</button>
+    <button id="exportSingleBtn">📦 导出单文件版</button>
+    <button id="ghBtn">☁ GitHub 发布</button>
+    <button id="logoutBtn">退出</button>
+  </div>
+  <div class="main">
+    <nav class="side" id="side"><div class="st">产品分类</div></nav>
+    <div class="content" id="content"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div id="ghModal" class="modal" style="display:none">
+  <div class="modal-box">
+    <h3>☁ 发布到 GitHub Pages</h3>
+    <p class="m-sub">把当前内容写回仓库的 <code>catalog.json</code>，GitHub Pages 会自动重建，约 1 分钟内前台生效。Token 仅存你本机浏览器，不会上传。</p>
+    <label>仓库（owner/repo）</label>
+    <input id="ghRepo" placeholder="hosmile123/workbench">
+    <label>分支</label>
+    <input id="ghBranch" placeholder="main" value="main">
+    <label>文件路径（仓库内，相对站点根）</label>
+    <input id="ghPath" placeholder="catalog.json" value="catalog.json">
+    <label>GitHub Token（需 repo 或 public_repo 权限）</label>
+    <input id="ghToken" type="password" placeholder="ghp_...">
+    <div class="m-actions">
+      <button id="ghSaveCfg" class="ghost">保存配置</button>
+      <button id="ghPublish" class="primary">🚀 发布当前内容</button>
+      <button id="ghClose" class="ghost">关闭</button>
+    </div>
+    <div class="m-sub" style="margin-top:18px;border-top:1px solid var(--line);padding-top:14px"><b style="color:var(--txt)">⚡ Supabase 实时发布（秒级生效）</b><br>把内容写入数据库，前台刷新即得最新，不用等 Pages 重建。</div>
+    <label>Supabase Project URL</label>
+    <input id="sbUrl" placeholder="https://xxxx.supabase.co">
+    <label>anon public key</label>
+    <input id="sbKey" type="text" placeholder="eyJhbGci...">
+    <div class="m-actions">
+      <button id="sbSaveCfg" class="ghost">保存配置（本机生效）</button>
+      <button id="sbPublish" class="primary">🚀 发布到 Supabase</button>
+    </div>
+    <div id="sbStatus" class="m-status"></div>
+    <div id="ghStatus" class="m-status"></div>
+  </div>
+</div>
+
+<script src="./supabase-config.js"></script>
+<script>
+/* ================= 状态 ================= */
+const LS_WORK = 'fxy_admin_work';
+const LS_PW   = 'fxy_admin_pwhash';
+const DEFAULT_PW = 'admin888';
+
+let DB = { categories: [] };
+let cur = '';
+let dirty = false;
+
+const $ = s => document.querySelector(s);
+function esc(s){const M={'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'};
+  return String(s==null?'':s).replace(/[&<>"]/g,c=>M[c]);}
+function toast(msg, kind){
+  const t=$('#toast'); t.textContent=msg; t.className='toast show'+(kind?' '+kind:'');
+  clearTimeout(toast._t); toast._t=setTimeout(()=>{t.className='toast';},2600);
+}
+function markDirty(){ dirty=true; $('#dirtyTip').textContent='● 有未保存的修改（本机）'; scheduleSave(); }
+let saveTimer;
+function scheduleSave(){
+  clearTimeout(saveTimer);
+  saveTimer=setTimeout(()=>{
+    try{ localStorage.setItem(LS_WORK, JSON.stringify(DB)); }catch(e){}
+  },400);
+}
+
+/* ================= 密码 ================= */
+async function sha256(s){
+  const buf=await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
+  return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+async function ensureDefaultPw(){
+  if(!localStorage.getItem(LS_PW)){
+    localStorage.setItem(LS_PW, await sha256(DEFAULT_PW));
+  }
+}
+function getPwHash(){ return localStorage.getItem(LS_PW) || ''; }
+
+function showLogin(){ $('#loginView').style.display='flex'; $('#adminView').style.display='none'; }
+function showAdmin(){ $('#loginView').style.display='none'; $('#adminView').style.display='block'; }
+
+async function doLogin(){
+  const u=$('#lu').value.trim(), p=$('#lp').value;
+  $('#loginErr').style.display='none';
+  if(u!=='admin'){ $('#loginErr').textContent='账号错误（默认 admin）'; $('#loginErr').style.display='block'; return; }
+  if(!p){ $('#loginErr').textContent='请输入密码'; $('#loginErr').style.display='block'; return; }
+  const btn=$('#loginBtn'); btn.disabled=true; btn.textContent='登录中…';
+  try{
+    await ensureDefaultPw();
+    const h=await sha256(p);
+    if(h!==getPwHash()) throw new Error('密码错误');
+    await initAdmin();
+  }catch(e){
+    $('#loginErr').textContent=e.message; $('#loginErr').style.display='block';
+  }finally{ btn.disabled=false; btn.textContent='登 录'; }
+}
+
+/* ================= 载入数据 ================= */
+async function initAdmin(){
+  let base=null;
+  try{ base = await sbLoad(); }catch(e){}
+  if(!base || !(base.categories||[]).length){
+    try{ base = await (await fetch('./catalog.json',{cache:'no-store'})).json(); }catch(e){}
+  }
+  const saved = localStorage.getItem(LS_WORK);
+  if(saved){
+    try{ DB=JSON.parse(saved); toast('已恢复本机未发布的修改','ok'); }
+    catch(e){ DB=base||{categories:[]}; }
+  } else {
+    DB=base||{categories:[]};
+  }
+  showAdmin();
+  cur = DB.categories[0] ? DB.categories[0].id : '';
+  renderSide(); renderContent();
+  dirty=false; $('#dirtyTip').textContent='';
+}
+
+/* ================= 渲染 ================= */
+function renderSide(){
+  let h='<div class="st">产品分类（'+DB.categories.length+'）</div>';
+  DB.categories.forEach(c=>{
+    h+='<a class="'+(c.id===cur?'on':'')+'" data-cat="'+esc(c.id)+'">'+
+       '<span>'+esc(c.emoji||'📦')+'</span><span>'+esc(c.name)+'</span>'+
+       '<span class="n">'+(c.products||[]).length+'</span></a>';
+  });
+  $('#side').innerHTML=h;
+}
+
+function renderContent(){
+  const c = DB.categories.find(x=>x.id===cur);
+  if(!c){ $('#content').innerHTML='<div class="hint">请选择左侧分类</div>'; return; }
+  const isCard = c.layout==='card';
+  let h='<div class="hint"><b>'+esc(c.name)+'</b> · '+
+    (isCard?'卡片式（公司 / 销售区域 / 投保须知 / 产品特色 / 产品图）'
+           :'表格式（产品名称 / 保险公司 / 保障亮点 / 参考保费 / 适用场景 / 备注）')+
+    '<br>修改会自动保存在本机；要让所有访客看到，请点「⬇ 导出 catalog.json」并重新发布。</div>';
+  h+='<button class="addbtn" id="addBtn">＋ 在「'+esc(c.name)+'」下添加一款产品</button>';
+  if(!c.products.length){
+    h+='<div class="hint">本分类还没有产品，点上面按钮添加。</div>';
+  }
+  c.products.forEach((p,i)=>{ h+=renderPCard(c,p,i,isCard); });
+  $('#content').innerHTML=h;
+}
+
+function renderPCard(c,p,i,isCard){
+  const key = c.id+'|'+i;
+  let h='<div class="pcard" data-key="'+esc(key)+'">';
+  h+='<div class="hd"><span class="idx">'+(i+1)+'</span>'+
+     '<span class="t">'+esc(p.name||p.company||p.insurer||'（未命名产品）')+'</span>'+
+     '<button data-act="up" title="上移">↑</button>'+
+     '<button data-act="down" title="下移">↓</button>'+
+     '<button data-act="del" class="del" title="删除">🗑</button></div>';
+  h+='<div class="pbody">';
+  h+='<div class="imgbox"><div class="prev" data-upload="'+esc(key)+'">';
+  if(p.image) h+='<img src="'+esc(p.image)+'" alt="">';
+  else h+='<div><div class="ic">📷</div><div>点击上传产品图</div></div>';
+  h+='</div><div class="ops">';
+  h+='<button data-upload="'+esc(key)+'">上传/替换</button>';
+  h+='<button class="rm" data-rmimg="'+esc(key)+'">移除</button>';
+  h+='</div></div>';
+  h+='<div class="fields">';
+  if(isCard){
+    h+=inp('公司名称 / 手续费率','company',p.company,key);
+    h+=ta('产品特色','feature',p.feature,key,'full');
+    h+=ta('销售区域','area',p.area,key,'full');
+    h+=ta('投保须知','notice',p.notice,key,'full');
+  }else{
+    h+=inp('产品名称','name',p.name,key);
+    h+=inp('保险公司','insurer',p.insurer,key);
+    h+=inp('参考保费','premium',p.premium,key);
+    h+=inp('适用场景','scene',p.scene,key);
+    h+=ta('保障亮点 / 主要责任','highlight',p.highlight,key,'full');
+    h+=ta('备注','note',p.note,key,'full');
+  }
+  h+='</div></div></div>';
+  return h;
+}
+function inp(label,f,v,key,cls){
+  return '<div class="f '+(cls||'')+'"><label>'+label+'</label>'+
+    '<input type="text" data-f="'+f+'" data-key="'+esc(key)+'" value="'+esc(v)+'"></div>';
+}
+function ta(label,f,v,key,cls){
+  return '<div class="f '+(cls||'')+'"><label>'+label+'</label>'+
+    '<textarea data-f="'+f+'" data-key="'+esc(key)+'">'+esc(v)+'</textarea></div>';
+}
+
+/* ================= 事件 ================= */
+document.addEventListener('click', async e=>{
+  const a = e.target.closest('.side a[data-cat]');
+  if(a){ cur=a.dataset.cat; renderSide(); renderContent(); window.scrollTo(0,0); return; }
+
+  const up = e.target.closest('[data-upload]');
+  if(up){ pickImage(up.dataset.upload); return; }
+
+  const rm = e.target.closest('[data-rmimg]');
+  if(rm){
+    const [cid,i]=rm.dataset.rmimg.split('|');
+    const c=DB.categories.find(x=>x.id===cid);
+    if(c && c.products[+i]){ c.products[+i].image=''; markDirty(); renderSide(); renderContent(); }
+    return;
+  }
+
+  const act = e.target.closest('.pcard .hd button[data-act]');
+  if(act){
+    const card=act.closest('.pcard');
+    const [cid,i]=card.dataset.key.split('|');
+    const c=DB.categories.find(x=>x.id===cid);
+    const idx=+i;
+    if(act.dataset.act==='up' && idx>0){
+      [c.products[idx-1],c.products[idx]]=[c.products[idx],c.products[idx-1]];
+    }else if(act.dataset.act==='down' && idx<c.products.length-1){
+      [c.products[idx+1],c.products[idx]]=[c.products[idx],c.products[idx+1]];
+    }else if(act.dataset.act==='del'){
+      if(!confirm('确认删除这款产品？')) return;
+      c.products.splice(idx,1);
+    }
+    markDirty(); renderSide(); renderContent();
+    return;
+  }
+
+  if(e.target.closest('#addBtn')){
+    const c=DB.categories.find(x=>x.id===cur);
+    c.products.push({id:'p'+Date.now().toString(36),name:'',insurer:'',highlight:'',
+      premium:'',scene:'',note:'',company:'',area:'',notice:'',feature:'',image:''});
+    markDirty(); renderSide(); renderContent();
+    window.scrollTo(0,document.body.scrollHeight);
+    return;
+  }
+});
+
+document.addEventListener('input', e=>{
+  const el=e.target.closest('[data-f]');
+  if(!el) return;
+  const [cid,i]=el.dataset.key.split('|');
+  const c=DB.categories.find(x=>x.id===cid);
+  if(c && c.products[+i]){ c.products[+i][el.dataset.f]=el.value; markDirty(); }
+});
+document.addEventListener('change', e=>{
+  const el=e.target.closest('[data-f]');
+  if(!el) return;
+  const [cid,i]=el.dataset.key.split('|');
+  const c=DB.categories.find(x=>x.id===cid);
+  if(c && c.products[+i]){ c.products[+i][el.dataset.f]=el.value; markDirty(); renderSide(); }
+});
+
+/* ================= 图片上传（压缩为 base64 内联） ================= */
+let pickKey=null;
+const fileInput=document.createElement('input');
+fileInput.type='file'; fileInput.accept='image/*'; fileInput.style.display='none';
+document.body.appendChild(fileInput);
+fileInput.addEventListener('change', async ()=>{
+  const f=fileInput.files && fileInput.files[0];
+  fileInput.value='';
+  if(!f||!pickKey) return;
+  try{
+    toast('正在处理图片…');
+    const b64 = await compress(f);
+    const [cid,i]=pickKey.split('|');
+    const c=DB.categories.find(x=>x.id===cid);
+    if(c && c.products[+i]){ c.products[+i].image=b64; markDirty(); renderSide(); renderContent(); }
+    toast('图片已替换（本机保存）','ok');
+  }catch(err){ toast('上传失败：'+err.message,'err'); }
+});
+function pickImage(key){ pickKey=key; fileInput.click(); }
+function compress(file, maxSide=1400, quality=0.86){
+  return new Promise((resolve,reject)=>{
+    const fr=new FileReader();
+    fr.onload=()=>{
+      const img=new Image();
+      img.onload=()=>{
+        let w=img.width,h=img.height;
+        if(Math.max(w,h)>maxSide){
+          if(w>=h){ h=Math.round(h*maxSide/w); w=maxSide; }
+          else { w=Math.round(w*maxSide/h); h=maxSide; }
+        }
+        const cv=document.createElement('canvas'); cv.width=w; cv.height=h;
+        const ctx=cv.getContext('2d');
+        ctx.fillStyle='#fff'; ctx.fillRect(0,0,w,h);
+        ctx.drawImage(img,0,0,w,h);
+        resolve(cv.toDataURL('image/jpeg',quality));
+      };
+      img.onerror=()=>reject(new Error('图片读取失败'));
+      img.src=fr.result;
+    };
+    fr.onerror=()=>reject(new Error('文件读取失败'));
+    fr.readAsDataURL(file);
+  });
+}
+
+/* ================= 导出 / 发布 ================= */
+function download(text, name, type){
+  const blob=new Blob([text],{type:type||'application/octet-stream'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name;
+  document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(a.href);
+}
+function buildData(){
+  return { version:(DB.version||1), updatedAt:new Date().toISOString(),
+           categories:DB.categories, source:'static-admin-export' };
+}
+$('#exportCatBtn').onclick=()=>{
+  download(JSON.stringify(buildData(),null,2),'catalog.json','application/json');
+  toast('已导出 catalog.json，重新发布后全网生效','ok');
+};
+$('#exportSingleBtn').onclick=async ()=>{
+  try{
+    toast('正在生成单文件版（内嵌图片）…');
+    const data=buildData();
+    // 把图片内联为 dataURL
+    const tasks=[];
+    data.categories.forEach(c=>c.products.forEach(p=>{
+      if(p.image && !p.image.startsWith('data:')){
+        tasks.push(fetch(p.image).then(r=>r.blob()).then(b=>new Promise(res=>{
+          const rd=new FileReader(); rd.onload=()=>{p.image=rd.result;res();}; rd.readAsDataURL(b);
+        })).catch(()=>{}));
+      }
+    }));
+    await Promise.all(tasks);
+    let html=await (await fetch('./index.html')).text();
+    const inject='<script>window.__CAT__='+JSON.stringify(data)+';<\/script>';
+    html=html.replace('</body>', inject+'\n</body>');
+    download(html,'非车险目录_单文件版.html','text/html');
+    toast('已导出单文件版（可单独打开/分享）','ok');
+  }catch(e){ toast('导出失败：'+e.message,'err'); }
+};
+$('#reloadBtn').onclick=async ()=>{
+  if(!confirm('恢复为云端(catalog.json)版本？本机未导出的修改将丢失。')) return;
+  localStorage.removeItem(LS_WORK);
+  try{ DB=await (await fetch('./catalog.json',{cache:'no-store'})).json(); }
+  catch(e){ DB={categories:[]}; }
+  dirty=false; $('#dirtyTip').textContent='';
+  renderSide(); renderContent();
+  toast('已恢复云端版本','ok');
+};
+$('#previewBtn').onclick=()=>window.open('./','_blank');
+$('#logoutBtn').onclick=()=>{ if(!dirty||confirm('有未保存的修改，确定退出？')){ showLogin(); } };
+
+/* ================= 修改密码 ================= */
+$('#pwdBtn').onclick=async ()=>{
+  const oldP=prompt('请输入原密码：');
+  if(oldP===null) return;
+  const newP=prompt('请输入新密码（至少 6 位）：');
+  if(newP===null) return;
+  if(newP.length<6){ alert('密码至少 6 位'); return; }
+  const newP2=prompt('请再次输入新密码：');
+  if(newP2===null) return;
+  if(newP!==newP2){ alert('两次输入不一致'); return; }
+  try{
+    const oldH=await sha256(oldP);
+    if(oldH!==getPwHash()){ alert('原密码错误'); return; }
+    localStorage.setItem(LS_PW, await sha256(newP));
+    toast('密码已修改（本机生效）','ok');
+  }catch(e){ alert('修改失败：'+e.message); }
+};
+
+/* ================= GitHub 发布 ================= */
+const LS_GH='fxy_admin_gh';
+function loadGh(){ try{return JSON.parse(localStorage.getItem(LS_GH)||'{}');}catch(e){return {};} }
+function saveGhCfg(){
+  localStorage.setItem(LS_GH, JSON.stringify({
+    repo:$('#ghRepo').value.trim(), branch:$('#ghBranch').value.trim()||'main',
+    path:$('#ghPath').value.trim()||'catalog.json', token:$('#ghToken').value.trim()
+  }));
+  toast('GitHub 配置已保存（仅本机）','ok');
+}
+function fillGh(){
+  const g=loadGh();
+  $('#ghRepo').value=g.repo||''; $('#ghBranch').value=g.branch||'main';
+  $('#ghPath').value=g.path||'catalog.json'; $('#ghToken').value=g.token||'';
+}
+function utf8ToBase64(str){ return btoa(unescape(encodeURIComponent(str))); }
+async function ghPublish(){
+  const g=loadGh();
+  const st=$('#ghStatus');
+  if(!g.repo||!g.token){ st.className='m-status err'; st.textContent='请先填写仓库与 Token，并点「保存配置」。'; return; }
+  const enc=p=>encodeURIComponent(p);
+  const api='https://api.github.com/repos/'+g.repo+'/contents/'+enc(g.path);
+  const headers={'Authorization':'Bearer '+g.token,'Accept':'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'};
+  st.className='m-status ing'; st.textContent='正在读取现有文件…';
+  let sha=null;
+  try{
+    const r=await fetch(api+'?ref='+enc(g.branch),{headers});
+    if(r.ok){ const j=await r.json(); sha=j.sha; }
+    else if(r.status!==404){ const e=await r.json().catch(()=>({})); throw new Error(e.message||('GitHub '+r.status)); }
+  }catch(e){ st.className='m-status err'; st.textContent='读取失败：'+e.message; return; }
+  const content=utf8ToBase64(JSON.stringify(buildData(),null,2));
+  st.className='m-status ing'; st.textContent='正在写回 catalog.json…';
+  try{
+    const r=await fetch(api,{method:'PUT',headers:Object.assign({},headers,{'Content-Type':'application/json'}),
+      body:JSON.stringify({message:'更新非车险产品目录',content:content,sha:sha||undefined,branch:g.branch})});
+    if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error(e.message||('GitHub '+r.status)); }
+    st.className='m-status ok'; st.textContent='✅ 已发布！GitHub Pages 正在重建，约 1 分钟内前台生效。';
+    toast('已发布到 GitHub','ok');
+    try{ localStorage.setItem(LS_WORK, JSON.stringify(DB)); }catch(e){}
+  }catch(e){ st.className='m-status err'; st.textContent='发布失败：'+e.message; }
+}
+$('#ghBtn').onclick=()=>{ fillGh(); $('#ghModal').style.display='flex'; $('#ghStatus').textContent=''; };
+$('#ghClose').onclick=()=>{ $('#ghModal').style.display='none'; };
+$('#ghSaveCfg').onclick=saveGhCfg;
+$('#ghPublish').onclick=ghPublish;
+$('#ghModal').addEventListener('click',e=>{ if(e.target.id==='ghModal') $('#ghModal').style.display='none'; });
+
+/* ================= Supabase 实时发布 ================= */
+function sbCfgAdmin(){
+  const c=Object.assign({},(window.SUPABASE||{}));
+  try{ const ls=JSON.parse(localStorage.getItem('fxy_supabase_cfg')||'{}'); if(ls&&ls.url) Object.assign(c,ls); }catch(e){}
+  if(c.url) c.url = String(c.url).replace(/\/rest\/v1\/?$/,'').replace(/\/+$/,'');
+  return c;
+}
+function fillSb(){ const c=sbCfgAdmin(); $('#sbUrl').value=c.url||''; $('#sbKey').value=c.key||''; }
+async function sbLoad(){
+  const c=sbCfgAdmin();
+  if(!c.url||!c.key) return null;
+  try{
+    const r=await fetch(c.url.replace(/\/+$/,'')+'/rest/v1/'+(c.table||'catalog')+'?select=data&id=eq.1',
+      {headers:{apikey:c.key,Authorization:'Bearer '+c.key}});
+    if(!r.ok) return null;
+    const j=await r.json();
+    return (j&&j[0]&&j[0].data)?j[0].data:null;
+  }catch(e){ return null; }
+}
+async function sbSaveCfg(){
+  const st=$('#sbStatus');
+  const url=$('#sbUrl').value.trim(), key=$('#sbKey').value.trim();
+  if(!url||!key){ st.className='m-status err'; st.textContent='请先填写 Project URL 与 anon key。'; return false; }
+  localStorage.setItem('fxy_supabase_cfg', JSON.stringify({url:url,key:key,table:(window.SUPABASE&&window.SUPABASE.table)||'catalog'}));
+  return true;
+}
+async function sbPublish(){
+  const st=$('#sbStatus');
+  if(!(await sbSaveCfg())) return;
+  const c=sbCfgAdmin();
+  st.className='m-status ing'; st.textContent='正在写入 Supabase…';
+  try{
+    const r=await fetch(c.url.replace(/\/+$/,'')+'/rest/v1/'+(c.table||'catalog')+'?id=eq.1',{
+      method:'PATCH',
+      headers:{apikey:c.key,Authorization:'Bearer '+c.key,'Content-Type':'application/json',Prefer:'return=minimal'},
+      body:JSON.stringify({data:buildData(),updated_at:new Date().toISOString()})
+    });
+    if(!r.ok){ const t=await r.text(); throw new Error(t.slice(0,200)||('HTTP '+r.status)); }
+    st.className='m-status ok'; st.textContent='✅ 已发布到 Supabase！前台刷新即得最新内容（无需重新部署）。';
+    toast('已发布到 Supabase','ok');
+    try{ localStorage.setItem(LS_WORK, JSON.stringify(DB)); }catch(e){}
+  }catch(e){ st.className='m-status err'; st.textContent='发布失败：'+e.message; }
+}
+$('#sbSaveCfg').onclick=()=>{ sbSaveCfg().then(ok=>{ if(ok) toast('Supabase 配置已保存（本机）','ok'); }); };
+$('#sbPublish').onclick=sbPublish;
+$('#ghBtn').onclick=()=>{ fillGh(); fillSb(); $('#ghModal').style.display='flex'; $('#ghStatus').textContent=''; $('#sbStatus').textContent=''; };
+
+/* ================= 启动 ================= */
+$('#loginBtn').onclick=doLogin;
+$('#lp').addEventListener('keydown',e=>{ if(e.key==='Enter') doLogin(); });
+$('#lu').addEventListener('keydown',e=>{ if(e.key==='Enter') $('#lp').focus(); });
+showLogin();
+</script>
+</body>
+</html>
