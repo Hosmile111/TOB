@@ -29,7 +29,10 @@ header.site{position:sticky;top:0;z-index:50;background:var(--bg);border-bottom:
 .wrap{max-width:1240px;margin:0 auto;padding:22px 16px 60px}
 .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
 @media(max-width:960px){.grid{grid-template-columns:repeat(2,1fr)}}
-@media(max-width:620px){.grid{grid-template-columns:1fr}}
+@media(max-width:620px){.grid{grid-template-columns:repeat(2,1fr);gap:10px}
+  .cat-hd{padding:10px 12px;font-size:16px;letter-spacing:1px}.cat-hd .emo{font-size:18px}
+  .cat-sub{font-size:12px;padding:6px 8px}.cat-count,.cat-link{font-size:12px;padding:6px 8px}
+  .title-bar h1{font-size:20px}.toolbar{padding:7px 12px;gap:6px}.toolbar input{min-width:0}}
 
 .cat-card{background:var(--c-light);border:1.5px solid var(--c-dark);border-radius:4px;overflow:hidden;cursor:pointer;transition:transform .15s,box-shadow .15s}
 .cat-card:hover{transform:translateY(-3px);box-shadow:0 8px 22px rgba(0,0,0,.12)}
@@ -71,6 +74,28 @@ header.site{position:sticky;top:0;z-index:50;background:var(--bg);border-bottom:
 .err{text-align:center;padding:70px 20px;color:#b82020}
 .tip{margin-top:28px;background:#fff;border:1px dashed #d7e0ec;border-radius:10px;padding:13px 16px;font-size:12.5px;color:var(--muted);line-height:1.8}
 .tip b{color:var(--txt)}
+
+/* 手续费开关 */
+.fee-sw{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);background:#fff;border-radius:20px;padding:4px 11px 4px 6px;cursor:pointer;font-size:12.5px;color:var(--muted);white-space:nowrap;transition:border-color .2s,color .2s}
+.fee-sw:hover{border-color:#1d4d8a;color:#1d4d8a}
+.fee-sw .knob{width:30px;height:18px;border-radius:10px;background:#c7d0dc;position:relative;transition:background .25s;flex-shrink:0}
+.fee-sw .knob::after{content:'';position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#fff;transition:transform .25s;box-shadow:0 1px 3px rgba(0,0,0,.25)}
+.fee-sw.pending .knob{background:#d99a2b}
+.fee-sw.pending .knob::after{transform:translateX(12px)}
+.fee-sw.on{border-color:#0f7b4f;color:#0f7b4f}
+.fee-sw.on .knob{background:#0f7b4f}
+.fee-sw.on .knob::after{transform:translateX(12px)}
+/* 手续费密码弹窗 */
+.fmask{position:fixed;inset:0;background:rgba(15,25,40,.5);display:flex;align-items:center;justify-content:center;z-index:999;padding:18px}
+.fbox{background:#fff;border-radius:14px;padding:24px;width:min(360px,94vw);box-shadow:0 20px 60px rgba(0,0,0,.25)}
+.fbox h3{margin:0 0 6px;font-size:17px}
+.fbox p{margin:0 0 14px;font-size:12.5px;color:var(--muted);line-height:1.7}
+.fbox input{width:100%;border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-size:15px;outline:none;letter-spacing:4px;text-align:center}
+.fbox input:focus{border-color:#1d4d8a;box-shadow:0 0 0 3px rgba(29,78,216,.1)}
+.fbox .acts{display:flex;gap:8px;margin-top:16px}
+.fbox .acts button{flex:1;border:1px solid var(--line);background:#fff;padding:10px;border-radius:8px;font-size:13px;cursor:pointer}
+.fbox .acts button.pri{background:#1d4d8a;color:#fff;border-color:#1d4d8a;font-weight:700}
+.fbox .msg{margin-top:10px;font-size:12.5px;min-height:18px;color:#b82020}
 @media print{.toolbar,.back{display:none!important}.cat-card,.prod-card{break-inside:avoid}}
 </style>
 </head>
@@ -79,15 +104,28 @@ header.site{position:sticky;top:0;z-index:50;background:var(--bg);border-bottom:
 <header class="site">
   <div class="title-bar">
     <h1>非车险产品浏览目录</h1>
-    <p id="subtitle">代理 / 业务员专用 · 点击卡片查看详情</p>
+    <p id="subtitle">点击卡片查看详情</p>
   </div>
   <div class="toolbar">
     <input id="q" type="search" placeholder="搜索产品名称 / 保险公司 / 保障亮点…">
     <span class="spacer"></span>
     <span class="updated" id="updated"></span>
-    <a href="./admin.html">⚙ 后台管理</a>
+    <button type="button" id="feeSw" class="fee-sw" aria-pressed="false" title="输入密码后显示手续费率"><span class="knob"></span><span>手续费</span></button>
   </div>
 </header>
+
+<div id="feeMask" class="fmask" style="display:none">
+  <div class="fbox">
+    <h3>🔒 查看手续费率</h3>
+    <p>请输入管理员提供的查看密码，验证后即可显示手续费率。</p>
+    <input id="feeInput" type="password" inputmode="numeric" maxlength="6" placeholder="••••" autocomplete="off">
+    <div class="msg" id="feeMsg"></div>
+    <div class="acts">
+      <button id="feeCancel">取消</button>
+      <button id="feeOk" class="pri">确定</button>
+    </div>
+  </div>
+</div>
 
 <div class="wrap" id="app"><div class="loading">正在加载产品数据…</div></div>
 
@@ -113,7 +151,36 @@ function applyDB(){
   document.getElementById('updated').textContent = DB.updatedAt ? ('更新于 '+fmtTime(DB.updatedAt)) : '';
   const n = (DB.categories||[]).length;
   document.getElementById('subtitle').textContent =
-    '代理 / 业务员专用 · 共 '+n+' 大类 · 点击卡片查看详情';
+    '共 '+n+' 大类 · 点击卡片查看详情';
+}
+
+/* ===== 手续费开关：默认关闭，费率显示 **；验证密码后显示真实费率 ===== */
+let FEE_ON = false;
+function passcodes(){ return (DB.viewPasscodes||[]).filter(x=>x && x.enabled && x.code); }
+function maskRate(s){ return String(s==null?'':s).replace(/\d+(?:\.\d+)?\s*%/g, '**%'); }
+function F(s){ return FEE_ON ? s : maskRate(s); }
+function validCode(code){
+  if(!code) return false;
+  return passcodes().some(x=>String(x.code)===String(code));
+}
+function syncFeeState(){
+  const code = localStorage.getItem('fxy_fee_code')||'';
+  if(code && !validCode(code)){
+    localStorage.removeItem('fxy_fee_code');
+    localStorage.setItem('fxy_fee_on','0');
+    FEE_ON = false;
+  }else{
+    FEE_ON = (localStorage.getItem('fxy_fee_on')==='1') && !!code;
+  }
+  updateFeeSw();
+}
+function updateFeeSw(){
+  const b=document.getElementById('feeSw');
+  if(!b) return;
+  b.classList.toggle('on', FEE_ON);
+  b.setAttribute('aria-pressed', FEE_ON?'true':'false');
+  const t=b.querySelector('span:last-child');
+  if(t) t.textContent = FEE_ON ? '手续费 ✓' : '手续费';
 }
 function sbCfg(){
   const c = Object.assign({}, (window.SUPABASE||{}));
@@ -131,14 +198,14 @@ async function loadSb(){
   return (j && j[0] && j[0].data && (j[0].data.categories||[]).length) ? j[0].data : null;
 }
 async function load(){
-  if(window.__CAT__){ DB = window.__CAT__; applyDB(); render(); return; }
+  if(window.__CAT__){ DB = window.__CAT__; applyDB(); syncFeeState(); render(); return; }
   try{
     const sb = await loadSb().catch(()=>null);
-    if(sb){ DB = sb; applyDB(); render(); return; }
+    if(sb){ DB = sb; applyDB(); syncFeeState(); render(); return; }
     const r = await fetch(API, { cache: 'no-store' });
     if(!r.ok) throw new Error('HTTP '+r.status);
     DB = await r.json();
-    applyDB();
+    applyDB(); syncFeeState();
     render();
   }catch(e){
     document.getElementById('app').innerHTML =
@@ -189,7 +256,7 @@ function renderHome(){
   });
   h += '</div>';
   h += '<div class="tip"><b>说明：</b>保费与保障内容仅供参考，实际以保险公司核保报价为准。'+
-       '需要修改产品或图片，请点击右上角「⚙ 后台管理」登录后操作（修改后导出 catalog.json 重新发布即可生效）。</div>';
+       '手续费率需管理员授权后查看。</div>';
   return h;
 }
 
@@ -214,7 +281,7 @@ function renderCat(c){
 
 function field(k, v){
   if(!v) return '';
-  return '<div class="field"><span class="k">'+esc(k)+'</span><span class="v">'+esc(v)+'</span></div>';
+  return '<div class="field"><span class="k">'+esc(k)+'</span><span class="v">'+esc(F(v))+'</span></div>';
 }
 
 function renderProd(p, c){
@@ -223,20 +290,20 @@ function renderProd(p, c){
                 ';--c-sub:'+(col.sub||'#2a4f76');
   let h = '<article class="prod-card" style="'+style+'">';
   if(p.image){
-    h += '<div class="prod-img"><img src="'+esc(p.image)+'" alt="'+esc(p.name||'产品图')+'" loading="lazy"></div>';
+    h += '<div class="prod-img"><img src="'+esc(p.image)+'" alt="'+esc(F(p.name||'产品图'))+'" loading="lazy"></div>';
   }
   h += '<div class="prod-body">';
   const title = p.name || p.company || '';
-  if(title) h += '<h4>'+esc(title)+'</h4>';
+  if(title) h += '<h4>'+esc(F(title))+'</h4>';
   const ins = p.insurer || p.company || '';
-  if(ins && ins !== title) h += '<span class="insurer">'+esc(ins)+'</span>';
-  if(p.premium) h += '<div class="fee">💰 参考保费：'+esc(p.premium)+'</div>';
-  if(p.highlight) h += '<div class="hl">'+esc(p.highlight)+'</div>';
+  if(ins && ins !== title) h += '<span class="insurer">'+esc(F(ins))+'</span>';
+  if(p.premium) h += '<div class="fee">💰 参考保费：'+esc(F(p.premium))+'</div>';
+  if(p.highlight) h += '<div class="hl">'+esc(F(p.highlight))+'</div>';
   if(p.feature) h += field('产品特色', p.feature);
   if(p.scene) h += field('适用场景', p.scene);
   if(p.area) h += field('销售区域', p.area);
-  if(p.notice) h += '<div class="notice">📋 投保须知：'+esc(p.notice)+'</div>';
-  if(p.note) h += '<div class="note">备注：'+esc(p.note)+'</div>';
+  if(p.notice) h += '<div class="notice">📋 投保须知：'+esc(F(p.notice))+'</div>';
+  if(p.note) h += '<div class="note">备注：'+esc(F(p.note))+'</div>';
   h += '</div></article>';
   return h;
 }
@@ -252,6 +319,52 @@ document.getElementById('q').addEventListener('input', e=>{
   clearTimeout(timer);
   timer = setTimeout(()=>{ KW = e.target.value.trim(); render(); }, 200);
 });
+
+/* ===== 手续费开关交互：点击→右滑→输密码→变绿显示 ===== */
+const feeSw = document.getElementById('feeSw');
+feeSw.addEventListener('click', ()=>{
+  if(FEE_ON){
+    FEE_ON = false;
+    localStorage.setItem('fxy_fee_on','0');
+    updateFeeSw(); render(); return;
+  }
+  const saved = localStorage.getItem('fxy_fee_code')||'';
+  if(saved && validCode(saved)){
+    FEE_ON = true; localStorage.setItem('fxy_fee_on','1');
+    updateFeeSw(); render(); return;
+  }
+  feeSw.classList.add('pending');
+  document.getElementById('feeMsg').textContent='';
+  document.getElementById('feeInput').value='';
+  document.getElementById('feeMask').style.display='flex';
+  setTimeout(()=>document.getElementById('feeInput').focus(),50);
+});
+function closeFeeMask(ok){
+  document.getElementById('feeMask').style.display='none';
+  if(!ok) feeSw.classList.remove('pending');
+}
+document.getElementById('feeCancel').onclick=()=>closeFeeMask(false);
+document.getElementById('feeMask').addEventListener('click',e=>{ if(e.target.id==='feeMask') closeFeeMask(false); });
+function doFeeOk(){
+  const v=(document.getElementById('feeInput').value||'').trim();
+  const msg=document.getElementById('feeMsg');
+  if(!v){ msg.textContent='请输入密码'; return; }
+  if(validCode(v)){
+    localStorage.setItem('fxy_fee_code', v);
+    localStorage.setItem('fxy_fee_on','1');
+    FEE_ON = true;
+    feeSw.classList.remove('pending');
+    updateFeeSw();
+    document.getElementById('feeMask').style.display='none';
+    render();
+  }else{
+    msg.textContent='密码无效或已失效，请联系管理员';
+    document.getElementById('feeInput').value='';
+    document.getElementById('feeInput').focus();
+  }
+}
+document.getElementById('feeOk').onclick=doFeeOk;
+document.getElementById('feeInput').addEventListener('keydown',e=>{ if(e.key==='Enter') doFeeOk(); });
 
 view = parseHash();
 load();
