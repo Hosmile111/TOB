@@ -139,7 +139,7 @@ header.site{position:sticky;top:0;z-index:50;background:var(--bg);border-bottom:
   <div class="fbox">
     <h3>🔒 查看费率</h3>
     <p>请输入管理员提供的查看密码，验证后即可显示费率。<br>如无密码，请联系微信：<b>Bigmangolike</b></p>
-    <input id="feeInput" type="password" inputmode="numeric" maxlength="6" placeholder="••••" autocomplete="off">
+    <input id="feeInput" type="password" inputmode="numeric" maxlength="10" placeholder="••••" autocomplete="off">
     <div class="msg" id="feeMsg"></div>
     <div class="acts">
       <button id="feeCancel">取消</button>
@@ -242,17 +242,17 @@ function writeCatCache(data){
   try{ localStorage.setItem(CAT_CACHE_KEY, JSON.stringify({_ts:Date.now(), data})); }catch(e){}
 }
 function bgRefresh(){
-  // 静默后台取最新数据写入缓存，下次访问自动用新
+  // 静默后台取线上最新数据：写缓存 + 若有变化则热更新当前页面（如后台刚生成新密码/改了内容）
   setTimeout(async()=>{
-    let next=null;
-    try{ next = await loadSb(); }catch(e){}
-    if(!next){
-      try{
-        const r = await fetch(API, {cache:'no-store'});
-        if(r.ok) next = await r.json();
-      }catch(e){}
-    }
-    if(next) writeCatCache(next);
+    try{
+      const next = await loadSb();
+      if(next){
+        writeCatCache(next);
+        if(JSON.stringify(next) !== JSON.stringify(DB)){
+          DB = next; applyDB(); syncFeeState(); render();
+        }
+      }
+    }catch(e){}
   }, 2500);
 }
 async function load(){
@@ -447,11 +447,19 @@ function closeFeeMask(ok){
 }
 document.getElementById('feeCancel').onclick=()=>closeFeeMask(false);
 document.getElementById('feeMask').addEventListener('click',e=>{ if(e.target.id==='feeMask') closeFeeMask(false); });
-function doFeeOk(){
+async function doFeeOk(){
   const v=(document.getElementById('feeInput').value||'').trim();
   const msg=document.getElementById('feeMsg');
   if(!v){ msg.textContent='请输入密码'; return; }
-  const aud = validCode(v);
+  let aud = validCode(v);
+  if(!aud){
+    // 本地缓存可能过期（后台刚生成了新密码）：强制拉线上最新数据重试一次
+    msg.textContent='正在验证…';
+    try{
+      const fresh = await loadSb();
+      if(fresh){ DB = fresh; writeCatCache(fresh); applyDB(); aud = validCode(v); }
+    }catch(e){}
+  }
   if(aud){
     localStorage.setItem('fxy_fee_code', v);
     localStorage.setItem('fxy_fee_on','1');
