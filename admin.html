@@ -163,7 +163,6 @@ button,input,textarea{font-family:inherit}
     <button id="exportCatBtn">⬇ 导出 catalog.json</button>
     <button id="exportSingleBtn">📦 导出单文件版</button>
     <button id="passBtn">🔑 查看密码</button>
-    <button id="ghBtn">☁ 发布到线上</button>
     <button id="logoutBtn">退出</button>
   </div>
   <div class="main">
@@ -173,42 +172,12 @@ button,input,textarea{font-family:inherit}
 </div>
 
 <div class="toast" id="toast"></div>
-
-<div id="ghModal" class="modal" style="display:none">
-  <div class="modal-box">
-    <h3>☁ 发布到 GitHub Pages</h3>
-    <p class="m-sub">把当前内容写回仓库的 <code>catalog.json</code>，GitHub Pages 会自动重建，约 1 分钟内前台生效。Token 仅存你本机浏览器，不会上传。</p>
-    <label>仓库（owner/repo）</label>
-    <input id="ghRepo" placeholder="hosmile123/workbench">
-    <label>分支</label>
-    <input id="ghBranch" placeholder="main" value="main">
-    <label>文件路径（仓库内，相对站点根）</label>
-    <input id="ghPath" placeholder="catalog.json" value="catalog.json">
-    <label>GitHub Token（需 repo 或 public_repo 权限）</label>
-    <input id="ghToken" type="password" placeholder="ghp_...">
-    <div class="m-actions">
-      <button id="ghSaveCfg" class="ghost">保存配置</button>
-      <button id="ghPublish" class="primary">🚀 发布当前内容</button>
-      <button id="ghClose" class="ghost">关闭</button>
-    </div>
-    <div class="m-sub" style="margin-top:18px;border-top:1px solid var(--line);padding-top:14px"><b style="color:var(--txt)">⚡ Supabase 实时发布（秒级生效）</b><br>把内容写入数据库，前台刷新即得最新，不用等 Pages 重建。</div>
-    <label>Supabase Project URL</label>
-    <input id="sbUrl" placeholder="https://xxxx.supabase.co">
-    <label>anon public key</label>
-    <input id="sbKey" type="text" placeholder="eyJhbGci...">
-    <div class="m-actions">
-      <button id="sbSaveCfg" class="ghost">保存配置（本机生效）</button>
-      <button id="sbPublish" class="primary">🚀 发布到 Supabase</button>
-    </div>
-    <div id="sbStatus" class="m-status"></div>
-    <div id="ghStatus" class="m-status"></div>
-  </div>
-</div>
-
 <div id="passModal" class="modal" style="display:none">
   <div class="modal-box">
     <h3>🔑 手续费查看密码</h3>
-    <p class="m-sub">生成 4-6 位数字密码发给不同人群，对方在前台「手续费」开关输入即可查看费率。<b>最多 10 组</b>；把某组设为「失效」后，用过它的人刷新页面会自动重新锁定。</p>
+    <p class="m-sub">生成 4-6 位数字密码发给不同人群，对方在前台「手续费」开关输入即可查看对应费率的<b>那一条手续费</b>（不会看到另一条）。<br>设置对应人群：
+      <b>业务员</b>密码 → 只看「业务员手续费」 / <b>客户</b>密码 → 只看「客户手续费」 / <b>全部</b>密码 → 两条都看（管理员校验用）。<br>
+      最多 10 组；把某组设为「失效」后，用过它的人刷新页面会自动重新锁定。</p>
     <div id="passList"></div>
     <div class="m-actions">
       <button id="passGen" class="primary">＋ 生成新密码</button>
@@ -255,7 +224,7 @@ function scheduleAutoSync(){
       await pushToSupabase();
       if(tip) tip.textContent='● 已同步 · 前台刷新即可看到';
     }catch(e){
-      if(tip) tip.textContent='● 已存本机（自动同步失败，请点「☁ 发布到线上」）';
+      if(tip) tip.textContent='● 已存本机（自动同步失败，请检查网络或刷新重试）';
     }
   },5000);
 }
@@ -367,7 +336,9 @@ function renderPCard(c,p,i,isCard){
   h+='</div></div>';
   h+='<div class="fields">';
   if(isCard){
-    h+=inp('公司名称 / 手续费率','company',p.company,key);
+    h+=inp('公司名称','company',p.company,key);
+    h+=inp('手续费（业务员）','feeAgent',p.feeAgent,key,'','如 18%');
+    h+=inp('手续费（客户）','feeClient',p.feeClient,key,'','如 23%');
     h+=ta('产品特色','feature',p.feature,key,'full');
     h+=ta('销售区域','area',p.area,key,'full');
     h+=ta('投保须知','notice',p.notice,key,'full');
@@ -375,6 +346,8 @@ function renderPCard(c,p,i,isCard){
     h+=inp('产品名称','name',p.name,key);
     h+=inp('保险公司','insurer',p.insurer,key);
     h+=inp('参考保费','premium',p.premium,key);
+    h+=inp('手续费（业务员）','feeAgent',p.feeAgent,key,'','如 18%');
+    h+=inp('手续费（客户）','feeClient',p.feeClient,key,'','如 23%');
     h+=inp('适用场景','scene',p.scene,key);
     h+=ta('保障亮点 / 主要责任','highlight',p.highlight,key,'full');
     h+=ta('备注','note',p.note,key,'full');
@@ -382,9 +355,10 @@ function renderPCard(c,p,i,isCard){
   h+='</div></div></div>';
   return h;
 }
-function inp(label,f,v,key,cls){
+function inp(label,f,v,key,cls,ph){
   return '<div class="f '+(cls||'')+'"><label>'+label+'</label>'+
-    '<input type="text" data-f="'+f+'" data-key="'+esc(key)+'" value="'+esc(v)+'"></div>';
+    '<input type="text" data-f="'+f+'" data-key="'+esc(key)+'"'+
+    (ph?' placeholder="'+esc(ph)+'"':'')+' value="'+esc(v)+'"></div>';
 }
 function ta(label,f,v,key,cls){
   return '<div class="f '+(cls||'')+'"><label>'+label+'</label>'+
@@ -428,7 +402,8 @@ document.addEventListener('click', async e=>{
   if(e.target.closest('#addBtn')){
     const c=DB.categories.find(x=>x.id===cur);
     c.products.push({id:'p'+Date.now().toString(36),name:'',insurer:'',highlight:'',
-      premium:'',scene:'',note:'',company:'',area:'',notice:'',feature:'',image:''});
+      premium:'',scene:'',note:'',company:'',area:'',notice:'',feature:'',image:'',
+      feeAgent:'',feeClient:''});
     markDirty(); renderSide(); renderContent();
     window.scrollTo(0,document.body.scrollHeight);
     return;
@@ -565,66 +540,18 @@ $('#pwdBtn').onclick=async ()=>{
       await pushToSupabase();
       toast('密码已修改，并已同步到线上（所有设备生效）','ok');
     }catch(e2){
-      toast('密码已改（本机生效），同步失败：'+e2.message+'，请点「☁ 发布到线上」手动发布','err');
+      toast('密码已改（本机生效），同步失败：'+e2.message+'（请检查网络，稍后再改一次）','err');
     }
   }catch(e){ alert('修改失败：'+e.message); }
 };
 
-/* ================= GitHub 发布 ================= */
-const LS_GH='fxy_admin_gh';
-function loadGh(){ try{return JSON.parse(localStorage.getItem(LS_GH)||'{}');}catch(e){return {};} }
-function saveGhCfg(){
-  localStorage.setItem(LS_GH, JSON.stringify({
-    repo:$('#ghRepo').value.trim(), branch:$('#ghBranch').value.trim()||'main',
-    path:$('#ghPath').value.trim()||'catalog.json', token:$('#ghToken').value.trim()
-  }));
-  toast('GitHub 配置已保存（仅本机）','ok');
-}
-function fillGh(){
-  const g=loadGh();
-  $('#ghRepo').value=g.repo||''; $('#ghBranch').value=g.branch||'main';
-  $('#ghPath').value=g.path||'catalog.json'; $('#ghToken').value=g.token||'';
-}
-function utf8ToBase64(str){ return btoa(unescape(encodeURIComponent(str))); }
-async function ghPublish(){
-  const g=loadGh();
-  const st=$('#ghStatus');
-  if(!g.repo||!g.token){ st.className='m-status err'; st.textContent='请先填写仓库与 Token，并点「保存配置」。'; return; }
-  const enc=p=>encodeURIComponent(p);
-  const api='https://api.github.com/repos/'+g.repo+'/contents/'+enc(g.path);
-  const headers={'Authorization':'Bearer '+g.token,'Accept':'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'};
-  st.className='m-status ing'; st.textContent='正在读取现有文件…';
-  let sha=null;
-  try{
-    const r=await fetch(api+'?ref='+enc(g.branch),{headers});
-    if(r.ok){ const j=await r.json(); sha=j.sha; }
-    else if(r.status!==404){ const e=await r.json().catch(()=>({})); throw new Error(e.message||('GitHub '+r.status)); }
-  }catch(e){ st.className='m-status err'; st.textContent='读取失败：'+e.message; return; }
-  const content=utf8ToBase64(JSON.stringify(buildData(),null,2));
-  st.className='m-status ing'; st.textContent='正在写回 catalog.json…';
-  try{
-    const r=await fetch(api,{method:'PUT',headers:Object.assign({},headers,{'Content-Type':'application/json'}),
-      body:JSON.stringify({message:'更新非车险产品目录',content:content,sha:sha||undefined,branch:g.branch})});
-    if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error(e.message||('GitHub '+r.status)); }
-    st.className='m-status ok'; st.textContent='✅ 已发布！GitHub Pages 正在重建，约 1 分钟内前台生效。';
-    toast('已发布到 GitHub','ok');
-    try{ localStorage.setItem(LS_WORK, JSON.stringify(DB)); }catch(e){}
-  }catch(e){ st.className='m-status err'; st.textContent='发布失败：'+e.message; }
-}
-$('#ghBtn').onclick=()=>{ fillGh(); $('#ghModal').style.display='flex'; $('#ghStatus').textContent=''; };
-$('#ghClose').onclick=()=>{ $('#ghModal').style.display='none'; };
-$('#ghSaveCfg').onclick=saveGhCfg;
-$('#ghPublish').onclick=ghPublish;
-$('#ghModal').addEventListener('click',e=>{ if(e.target.id==='ghModal') $('#ghModal').style.display='none'; });
-
-/* ================= Supabase 实时发布 ================= */
+/* ================= Supabase 实时同步（自动） ================= */
 function sbCfgAdmin(){
   const c=Object.assign({},(window.SUPABASE||{}));
   try{ const ls=JSON.parse(localStorage.getItem('fxy_supabase_cfg')||'{}'); if(ls&&ls.url) Object.assign(c,ls); }catch(e){}
   if(c.url) c.url = String(c.url).replace(/\/rest\/v1\/?$/,'').replace(/\/+$/,'');
   return c;
 }
-function fillSb(){ const c=sbCfgAdmin(); $('#sbUrl').value=c.url||''; $('#sbKey').value=c.key||''; }
 async function sbLoad(){
   const c=sbCfgAdmin();
   if(!c.url||!c.key) return null;
@@ -636,33 +563,6 @@ async function sbLoad(){
     return (j&&j[0]&&j[0].data)?j[0].data:null;
   }catch(e){ return null; }
 }
-async function sbSaveCfg(){
-  const st=$('#sbStatus');
-  const url=$('#sbUrl').value.trim(), key=$('#sbKey').value.trim();
-  if(!url||!key){ st.className='m-status err'; st.textContent='请先填写 Project URL 与 anon key。'; return false; }
-  localStorage.setItem('fxy_supabase_cfg', JSON.stringify({url:url,key:key,table:(window.SUPABASE&&window.SUPABASE.table)||'catalog'}));
-  return true;
-}
-async function sbPublish(){
-  const st=$('#sbStatus');
-  if(!(await sbSaveCfg())) return;
-  const c=sbCfgAdmin();
-  st.className='m-status ing'; st.textContent='正在写入 Supabase…';
-  try{
-    const r=await fetch(c.url.replace(/\/+$/,'')+'/rest/v1/'+(c.table||'catalog')+'?id=eq.1',{
-      method:'PATCH',
-      headers:{apikey:c.key,Authorization:'Bearer '+c.key,'Content-Type':'application/json',Prefer:'return=minimal'},
-      body:JSON.stringify({data:buildData(),updated_at:new Date().toISOString()})
-    });
-    if(!r.ok){ const t=await r.text(); throw new Error(t.slice(0,200)||('HTTP '+r.status)); }
-    st.className='m-status ok'; st.textContent='✅ 已发布到 Supabase！前台刷新即得最新内容（无需重新部署）。';
-    toast('已发布到 Supabase','ok');
-    try{ localStorage.setItem(LS_WORK, JSON.stringify(DB)); }catch(e){}
-  }catch(e){ st.className='m-status err'; st.textContent='发布失败：'+e.message; }
-}
-$('#sbSaveCfg').onclick=()=>{ sbSaveCfg().then(ok=>{ if(ok) toast('Supabase 配置已保存（本机）','ok'); }); };
-$('#sbPublish').onclick=sbPublish;
-$('#ghBtn').onclick=()=>{ fillGh(); fillSb(); $('#ghModal').style.display='flex'; $('#ghStatus').textContent=''; $('#sbStatus').textContent=''; };
 
 /* 直接把当前数据（含密码哈希 / 查看密码）推送到 Supabase，不依赖弹窗输入 */
 async function pushToSupabase(){
@@ -694,9 +594,15 @@ function renderPass(){
     let h='';
     arr.forEach((x,i)=>{
       const on = (x.enabled !== false);
+      const aud = x.audience || 'both';
       h += '<div class="prow">'+
            '<input class="pcode" value="'+esc(x.code)+'" readonly>'+
            '<input class="plabel" data-pi="'+i+'" placeholder="人群备注（如：中介A组）" value="'+esc(x.label||'')+'">'+
+           '<select class="paud" data-paud="'+i+'">'+
+             '<option value="both"'+(aud==='both'?' selected':'')+'>全部</option>'+
+             '<option value="agent"'+(aud==='agent'?' selected':'')+'>业务员</option>'+
+             '<option value="client"'+(aud==='client'?' selected':'')+'>客户</option>'+
+           '</select>'+
            '<button class="'+(on?'on':'off')+'" data-ptog="'+i+'">'+(on?'有效':'已失效')+'</button>'+
            '<button class="del" data-pdel="'+i+'">删除</button>'+
            '</div>';
@@ -716,7 +622,7 @@ $('#passGen').onclick=()=>{
   arr.push({ id:'pc'+Date.now().toString(36), code:genPassCode(), label:'', enabled:true,
              createdAt:new Date().toISOString() });
   markDirty(); renderPass();
-  toast('已生成新密码，记得点「🚀 发布到 Supabase」生效','ok');
+  toast('已生成新密码，约 5 秒后自动同步到线上','ok');
 };
 $('#passList').addEventListener('click',e=>{
   const t=e.target.closest('[data-ptog]');
@@ -730,9 +636,13 @@ $('#passList').addEventListener('click',e=>{
 });
 $('#passList').addEventListener('input',e=>{
   const el=e.target.closest('[data-pi]');
-  if(!el) return;
-  ensurePass()[+el.dataset.pi].label = el.value;
-  markDirty();
+  if(el){ ensurePass()[+el.dataset.pi].label = el.value; markDirty(); return; }
+  const au=e.target.closest('[data-paud]');
+  if(au){ ensurePass()[+au.dataset.paud].audience = au.value; markDirty(); return; }
+});
+$('#passList').addEventListener('change',e=>{
+  const au=e.target.closest('[data-paud]');
+  if(au){ ensurePass()[+au.dataset.paud].audience = au.value; markDirty(); }
 });
 
 /* ================= 启动 ================= */
