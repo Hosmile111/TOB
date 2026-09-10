@@ -4,6 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>非车险产品浏览目录</title>
+<link rel="preconnect" href="https://hrwezjngocxtlfsprmwk.supabase.co" crossorigin>
+<link rel="dns-prefetch" href="https://hosmile111.github.io">
+<link rel="preconnect" href="https://hrwezjngocxtlfsprmwk.supabase.co" crossorigin>
+<link rel="dns-prefetch" href="https://hosmile111.github.io">
+<link rel="preconnect" href="https://hrwezjngocxtlfsprmwk.supabase.co" crossorigin>
+<link rel="dns-prefetch" href="https://hosmile111.github.io">
+<link rel="preconnect" href="https://hrwezjngocxtlfsprmwk.supabase.co" crossorigin>
+<link rel="dns-prefetch" href="https://hosmile111.github.io">
 <style>
 :root{--bg:#f3f5f8;--line:#e2e7ee;--txt:#1b2430;--muted:#6b7a8d;--card:#fff;
 --shadow:0 1px 2px rgba(16,32,64,.05),0 6px 18px rgba(16,32,64,.06)}
@@ -225,19 +233,60 @@ async function loadSb(){
   const j = await r.json();
   return (j && j[0] && j[0].data && (j[0].data.categories||[]).length) ? j[0].data : null;
 }
+/* 数据加载：localStorage 5 分钟缓存 + supabase/catalog 并发（谁先到用谁），8s 兜底超时 */
+const CAT_CACHE_KEY='fxy_cat_cache', CAT_CACHE_TTL=5*60*1000;
+function readCatCache(){
+  try{
+    const o = JSON.parse(localStorage.getItem(CAT_CACHE_KEY)||'{}');
+    if(o && o._ts && Date.now()-o._ts < CAT_CACHE_TTL && o.data && (o.data.categories||[]).length) return o.data;
+  }catch(e){}
+  return null;
+}
+function writeCatCache(data){
+  try{ localStorage.setItem(CAT_CACHE_KEY, JSON.stringify({_ts:Date.now(), data})); }catch(e){}
+}
+function bgRefresh(){
+  // 静默后台取最新数据写入缓存，下次访问自动用新
+  setTimeout(async()=>{
+    let next=null;
+    try{ next = await loadSb(); }catch(e){}
+    if(!next){
+      try{
+        const r = await fetch(API, {cache:'no-store'});
+        if(r.ok) next = await r.json();
+      }catch(e){}
+    }
+    if(next) writeCatCache(next);
+  }, 2500);
+}
 async function load(){
   if(window.__CAT__){ DB = window.__CAT__; applyDB(); syncFeeState(); render(); return; }
-  try{
-    const sb = await loadSb().catch(()=>null);
-    if(sb){ DB = sb; applyDB(); syncFeeState(); render(); return; }
-    const r = await fetch(API, { cache: 'no-store' });
-    if(!r.ok) throw new Error('HTTP '+r.status);
-    DB = await r.json();
-    applyDB(); syncFeeState();
-    render();
-  }catch(e){
+
+  // 1) 本地缓存秒开
+  const cached = readCatCache();
+  if(cached){
+    DB = cached; applyDB(); syncFeeState(); render();
+    bgRefresh();
+    return;
+  }
+
+  // 2) 并发：supabase + catalog.json，谁先到用谁
+  let resolved=false;
+  const tryUse = (d)=>{
+    if(resolved) return;
+    if(!d || !(d.categories||[]).length) return;
+    resolved=true;
+    DB = d; writeCatCache(d);
+    applyDB(); syncFeeState(); render();
+  };
+  loadSb().then(tryUse).catch(()=>{});
+  fetch(API, {cache:'no-store'}).then(r=>r.ok?r.json():null).then(tryUse).catch(()=>{});
+
+  // 3) 12s 兜底
+  await new Promise(r=>setTimeout(r, 12000));
+  if(!resolved){
     document.getElementById('app').innerHTML =
-      '<div class="err">数据加载失败：'+esc(e.message)+'<br><br>请确认 catalog.json 与 index.html 在同一目录。</div>';
+      '<div class="err">数据加载超时：Supabase 和 catalog.json 都不可达<br><br>请检查网络后刷新。</div>';
   }
 }
 
