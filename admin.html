@@ -277,7 +277,7 @@ function renderSide(){
   let h='<div class="st">产品分类（'+DB.categories.length+'）</div>';
   DB.categories.forEach(c=>{
     h+='<a class="'+(c.id===cur?'on':'')+'" data-cat="'+esc(c.id)+'">'+
-       '<span>'+esc(c.emoji||'📦')+'</span><span>'+esc(c.name)+'</span>'+
+       (c.emoji?'<span>'+esc(c.emoji)+'</span>':'')+'<span>'+esc(c.name)+'</span>'+
        '<span class="n">'+(c.products||[]).length+'</span></a>';
   });
   $('#side').innerHTML=h;
