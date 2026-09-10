@@ -878,5 +878,19 @@
         }
       ]
     }
+  ],
+  "viewPasscodes": [
+    {
+      "id": "pc-demo-1",
+      "code": "1234",
+      "label": "示例：中介A组",
+      "enabled": true
+    },
+    {
+      "id": "pc-demo-2",
+      "code": "8888",
+      "label": "示例：内部团队",
+      "enabled": true
+    }
   ]
 }
