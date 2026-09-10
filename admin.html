@@ -487,23 +487,48 @@ document.addEventListener('click', async e=>{
   }
 });
 
-function autoFillFees(input){
-  const v=String(input.value||'').trim();
-  const m=v.match(/(-?\d+(?:\.\d+)?)/);
-  if(!m) return;
-  const n=parseFloat(m[1]);
-  if(!isFinite(n)) return;
-  const hasPct=/%/.test(v);
-  const agent=+(n-5).toFixed(2);
-  const client=+(agent-3).toFixed(2);
-  const fmt=x=>hasPct?(x+'%'):String(x);
-  const key=input.dataset.key;
-  const card=input.closest('.pcard');
-  if(!card) return;
+// 工具：解析数字 / 判断带 % / 格式化 / 夹到最小 1 / 设置值（带 input 事件传播）
+function _feeNum(s){const m=String(s==null?'':s).match(/(-?\d+(?:\.\d+)?)/);return m?parseFloat(m[1]):null}
+function _feePct(el){return /%/.test(String(el&&el.value||''))}
+function _feeFmt(x,usePct){return usePct?(x+'%'):String(x)}
+function _feeClamp(x){return Math.max(1,+(+x).toFixed(2))}
+function _feeSet(el,v){if(!el)return;el.value=v;el.dispatchEvent(new Event('input',{bubbles:true}))}
+// 渠道费用改动 → 业务员=渠道-5（最低1）、客户=业务员-3（最低1）
+function fillFromChannel(input){
+  const ch=_feeNum(input.value);if(ch==null)return;
+  const key=input.dataset.key,card=input.closest('.pcard');if(!card)return;
   const a=card.querySelector('input[data-f="feeAgent"][data-key="'+key+'"]');
   const c=card.querySelector('input[data-f="feeClient"][data-key="'+key+'"]');
-  if(a){ a.value=fmt(agent); a.dispatchEvent(new Event('input',{bubbles:true})); }
-  if(c){ c.value=fmt(client); c.dispatchEvent(new Event('input',{bubbles:true})); }
+  const usePct=_feePct(input);
+  const agent=_feeClamp(ch-5),client=_feeClamp(agent-3);
+  _feeSet(a,_feeFmt(agent,usePct));_feeSet(c,_feeFmt(client,usePct));
+}
+// 业务员/客户失焦若为空 → 按规则回填（避免费率为空）
+function refillOnEmpty(input){
+  if((input.dataset.f!=='feeAgent'&&input.dataset.f!=='feeClient')||String(input.value).trim()!=='')return;
+  const key=input.dataset.key,card=input.closest('.pcard');if(!card)return;
+  const chEl=card.querySelector('input[data-f="feeChannel"][data-key="'+key+'"]');
+  const aEl =card.querySelector('input[data-f="feeAgent"][data-key="'+key+'"]');
+  const cEl =card.querySelector('input[data-f="feeClient"][data-key="'+key+'"]');
+  if(input.dataset.f==='feeAgent'){
+    const ch=_feeNum(chEl&&chEl.value);if(ch==null)return;
+    const agent=_feeClamp(ch-5),client=_feeClamp(agent-3);
+    _feeSet(input,_feeFmt(agent,_feePct(chEl)));
+    _feeSet(cEl,_feeFmt(client,_feePct(chEl)));
+  }else{
+    let agent=_feeNum(aEl&&aEl.value);
+    if(agent==null){
+      const ch=_feeNum(chEl&&chEl.value);if(ch==null)return;
+      agent=_feeClamp(ch-5);_feeSet(aEl,_feeFmt(agent,_feePct(chEl)));
+    }else{ agent=_feeClamp(agent); }
+    _feeSet(input,_feeFmt(_feeClamp(agent-3),_feePct(chEl)||_feePct(aEl)));
+  }
+}
+// 任何手续费字段若为负数 → 自动夹到 1
+function clampNegative(input){
+  if(input.dataset.f!=='feeChannel'&&input.dataset.f!=='feeAgent'&&input.dataset.f!=='feeClient')return;
+  const v=_feeNum(input.value);
+  if(v!=null&&v<1)_feeSet(input,_feeFmt(_feeClamp(v),_feePct(input)));
 }
 document.addEventListener('input', e=>{
   const el=e.target.closest('[data-f]');
@@ -511,14 +536,17 @@ document.addEventListener('input', e=>{
   const [cid,i]=el.dataset.key.split('|');
   const c=DB.categories.find(x=>x.id===cid);
   if(c && c.products[+i]){ c.products[+i][el.dataset.f]=el.value; markDirty();
-    if(el.dataset.f==='feeChannel') autoFillFees(el); }
+    if(el.dataset.f==='feeChannel') fillFromChannel(el); }
 });
 document.addEventListener('change', e=>{
   const el=e.target.closest('[data-f]');
   if(!el) return;
   const [cid,i]=el.dataset.key.split('|');
   const c=DB.categories.find(x=>x.id===cid);
-  if(c && c.products[+i]){ c.products[+i][el.dataset.f]=el.value; markDirty(); renderSide(); }
+  if(c && c.products[+i]){ c.products[+i][el.dataset.f]=el.value; markDirty(); renderSide();
+    if(el.dataset.f==='feeAgent'||el.dataset.f==='feeClient') refillOnEmpty(el);
+    clampNegative(el);
+  }
 });
 
 /* ================= 图片上传（压缩为 base64 内联） ================= */
