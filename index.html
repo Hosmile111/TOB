@@ -274,7 +274,7 @@ function renderHome(){
          ';--c-light:'+(col.light||'#dbe6f4')+';--c-sub:'+(col.sub||'#2a4f76')+
          ';--c-acc:'+(col.acc||'#2a72c6')+';--c-link:'+(col.link||'#2a72c6')+
          '" data-cat="'+esc(c.id)+'">';
-    h += '<div class="cat-hd"><span class="emo">'+esc(c.emoji||'📦')+'</span><span>'+esc(c.name)+'</span></div>';
+    h += '<div class="cat-hd">'+(c.emoji?'<span class="emo">'+esc(c.emoji)+'</span>':'')+'<span>'+esc(c.name)+'</span></div>';
     h += '<div class="cat-sub">'+esc(c.tagline||'')+'</div>';
     h += '<div class="cat-count">收录 <b>'+(KW?list.length:c.products.length)+'</b> 款产品</div>';
     h += '<div class="cat-link">🔍 点击查看详情 →</div>';
@@ -291,7 +291,7 @@ function renderCat(c){
   const style = '--c-dark:'+(col.dark||'#1d4d8a')+';--c-light:'+(col.light||'#dbe6f4')+
                 ';--c-sub:'+(col.sub||'#2a4f76');
   let h = '<div class="detail-bar"><button class="back" data-go="home">← 返回目录</button></div>';
-  h += '<div class="detail-hd" style="'+style+'"><span class="emo">'+esc(c.emoji||'📦')+'</span>'+
+  h += '<div class="detail-hd" style="'+style+'">'+(c.emoji?'<span class="emo">'+esc(c.emoji)+'</span>':'')+
        '<div><h2>'+esc(c.name)+'</h2><p>'+esc(c.tagline||'')+' · 共 '+c.products.length+' 款产品</p></div></div>';
 
   const list = c.products.filter(matchP);
