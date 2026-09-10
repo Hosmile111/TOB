@@ -72,6 +72,9 @@ button,input,textarea{font-family:inherit}
 .fields input,.fields textarea{border:1px solid var(--line);border-radius:7px;padding:7px 10px;font-size:13px;outline:none;width:100%;resize:vertical}
 .fields input:focus,.fields textarea:focus{border-color:#1d4d8a;box-shadow:0 0 0 3px rgba(29,78,216,.1)}
 .fields textarea{min-height:62px}
+.fields .f.fee3{grid-column:1/-1}
+.fields .f.fee3 .fee3-row{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.fields .f.fee3 .fee3-row input{flex:1;min-width:110px;font-size:12.5px}
 
 .addbtn{width:100%;border:1.5px dashed #cdd6e2;background:#fff;color:var(--muted);padding:13px;border-radius:10px;font-size:13.5px;cursor:pointer;margin-bottom:20px}
 .addbtn:hover{border-color:#1d4d8a;color:#1d4d8a;background:#f6f9ff}
@@ -176,8 +179,9 @@ button,input,textarea{font-family:inherit}
 <div id="passModal" class="modal" style="display:none">
   <div class="modal-box">
     <h3>🔑 手续费查看密码</h3>
-    <p class="m-sub">生成 4-6 位数字密码发给不同人群，对方在前台「手续费」开关输入即可查看对应费率的<b>那一条手续费</b>（不会看到另一条）。<br>设置对应人群：
-      <b>业务员</b>密码 → 只看「业务员手续费」 / <b>客户</b>密码 → 只看「客户手续费」 / <b>全部</b>密码 → 两条都看（管理员校验用）。<br>
+    <p class="m-sub">生成 5-6 位数字密码发给不同人群，对方在前台「手续费」开关输入即可查看对应费率的<b>那一条手续费</b>（不会看到其他）。<br>设置对应人群：
+      <b>业务员</b>密码 → 只看业务员费率 / <b>客户</b>密码 → 只看客户费率 / <b>渠道</b>密码 → 只看渠道费率 / <b>全部</b>密码 → 三条都看（管理员校验用）。<br>
+      后台录入「渠道费用」时，业务员会自动=渠道-5、客户自动=业务员-3；这两项也可自由修改。<br>
       最多 10 组；把某组设为「失效」后，用过它的人刷新页面会自动重新锁定。</p>
     <div id="passList"></div>
     <div class="m-actions">
@@ -404,8 +408,7 @@ function renderPCard(c,p,i,isCard){
   h+='<div class="fields">';
   if(isCard){
     h+=inp('公司名称','company',p.company,key);
-    h+=inp('手续费（业务员）','feeAgent',p.feeAgent,key,'','如 18%');
-    h+=inp('手续费（客户）','feeClient',p.feeClient,key,'','如 23%');
+    h+=fee3(p,key);
     h+=ta('产品特色','feature',p.feature,key,'full');
     h+=ta('销售区域','area',p.area,key,'full');
     h+=ta('投保须知','notice',p.notice,key,'full');
@@ -413,8 +416,7 @@ function renderPCard(c,p,i,isCard){
     h+=inp('产品名称','name',p.name,key);
     h+=inp('保险公司','insurer',p.insurer,key);
     h+=inp('参考保费','premium',p.premium,key);
-    h+=inp('手续费（业务员）','feeAgent',p.feeAgent,key,'','如 18%');
-    h+=inp('手续费（客户）','feeClient',p.feeClient,key,'','如 23%');
+    h+=fee3(p,key);
     h+=inp('适用场景','scene',p.scene,key);
     h+=ta('保障亮点 / 主要责任','highlight',p.highlight,key,'full');
     h+=ta('备注','note',p.note,key,'full');
@@ -426,6 +428,14 @@ function inp(label,f,v,key,cls,ph){
   return '<div class="f '+(cls||'')+'"><label>'+label+'</label>'+
     '<input type="text" data-f="'+f+'" data-key="'+esc(key)+'"'+
     (ph?' placeholder="'+esc(ph)+'"':'')+' value="'+esc(v)+'"></div>';
+}
+function fee3(p,key){
+  return '<div class="f fee3"><label>渠道 / 业务员 / 客户（紧凑）</label>'+
+    '<div class="fee3-row">'+
+    '<input type="text" data-f="feeChannel" data-key="'+esc(key)+'" placeholder="渠道 如 23%" value="'+esc(p.feeChannel||'')+'" title="渠道费用（填此项会自动算 业务员=渠道-5、客户=业务员-3）">'+
+    '<input type="text" data-f="feeAgent"   data-key="'+esc(key)+'" placeholder="业务员 如 18%" value="'+esc(p.feeAgent||'')+'"   title="业务员费用（自动=渠道-5，可自由改）">'+
+    '<input type="text" data-f="feeClient"  data-key="'+esc(key)+'" placeholder="客户 如 15%" value="'+esc(p.feeClient||'')+'"  title="客户费用（自动=业务员-3，可自由改）">'+
+    '</div></div>';
 }
 function ta(label,f,v,key,cls){
   return '<div class="f '+(cls||'')+'"><label>'+label+'</label>'+
@@ -470,19 +480,38 @@ document.addEventListener('click', async e=>{
     const c=DB.categories.find(x=>x.id===cur);
     c.products.push({id:'p'+Date.now().toString(36),name:'',insurer:'',highlight:'',
       premium:'',scene:'',note:'',company:'',area:'',notice:'',feature:'',image:'',
-      feeAgent:'',feeClient:''});
+      feeAgent:'',feeClient:'',feeChannel:''});
     markDirty(); renderSide(); renderContent();
     window.scrollTo(0,document.body.scrollHeight);
     return;
   }
 });
 
+function autoFillFees(input){
+  const v=String(input.value||'').trim();
+  const m=v.match(/(-?\d+(?:\.\d+)?)/);
+  if(!m) return;
+  const n=parseFloat(m[1]);
+  if(!isFinite(n)) return;
+  const hasPct=/%/.test(v);
+  const agent=+(n-5).toFixed(2);
+  const client=+(agent-3).toFixed(2);
+  const fmt=x=>hasPct?(x+'%'):String(x);
+  const key=input.dataset.key;
+  const card=input.closest('.pcard');
+  if(!card) return;
+  const a=card.querySelector('input[data-f="feeAgent"][data-key="'+key+'"]');
+  const c=card.querySelector('input[data-f="feeClient"][data-key="'+key+'"]');
+  if(a){ a.value=fmt(agent); a.dispatchEvent(new Event('input',{bubbles:true})); }
+  if(c){ c.value=fmt(client); c.dispatchEvent(new Event('input',{bubbles:true})); }
+}
 document.addEventListener('input', e=>{
   const el=e.target.closest('[data-f]');
   if(!el) return;
   const [cid,i]=el.dataset.key.split('|');
   const c=DB.categories.find(x=>x.id===cid);
-  if(c && c.products[+i]){ c.products[+i][el.dataset.f]=el.value; markDirty(); }
+  if(c && c.products[+i]){ c.products[+i][el.dataset.f]=el.value; markDirty();
+    if(el.dataset.f==='feeChannel') autoFillFees(el); }
 });
 document.addEventListener('change', e=>{
   const el=e.target.closest('[data-f]');
@@ -667,7 +696,7 @@ async function pushToSupabase(){
 function ensurePass(){ if(!Array.isArray(DB.viewPasscodes)) DB.viewPasscodes=[]; return DB.viewPasscodes; }
 function genPassCode(){
   let s='';
-  const len = 4 + Math.floor(Math.random()*3); // 4~6 位
+  const len = 5 + Math.floor(Math.random()*2); // 5~6 位
   for(let i=0;i<len;i++) s += String(Math.floor(Math.random()*10));
   return s;
 }
@@ -688,6 +717,7 @@ function renderPass(){
              '<option value="both"'+(aud==='both'?' selected':'')+'>全部</option>'+
              '<option value="agent"'+(aud==='agent'?' selected':'')+'>业务员</option>'+
              '<option value="client"'+(aud==='client'?' selected':'')+'>客户</option>'+
+             '<option value="channel"'+(aud==='channel'?' selected':'')+'>渠道</option>'+
            '</select>'+
            '<button class="'+(on?'on':'off')+'" data-ptog="'+i+'">'+(on?'有效':'已失效')+'</button>'+
            '<button class="del" data-pdel="'+i+'">删除</button>'+
