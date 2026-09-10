@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>非车险产品浏览目录</title>
+<style>
+:root{--bg:#f3f5f8;--line:#e2e7ee;--txt:#1b2430;--muted:#6b7a8d;--card:#fff;
+--shadow:0 1px 2px rgba(16,32,64,.05),0 6px 18px rgba(16,32,64,.06)}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--bg);color:var(--txt);
+font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+font-size:14px;line-height:1.6;-webkit-font-smoothing:antialiased}
+button,input{font-family:inherit}
+
+header.site{position:sticky;top:0;z-index:50;background:var(--bg);border-bottom:1px solid var(--line)}
+.title-bar{background:linear-gradient(180deg,#1d4d8a,#1a4680);color:#fff;text-align:center;padding:18px 20px 14px}
+.title-bar h1{margin:0 0 4px;font-size:24px;letter-spacing:2px;font-weight:800}
+.title-bar p{margin:0;font-size:13px;opacity:.92;letter-spacing:.5px}
+.toolbar{display:flex;align-items:center;gap:8px;max-width:1240px;margin:0 auto;padding:8px 16px;background:#fff;border-bottom:1px solid var(--line)}
+.toolbar .spacer{flex:1}
+.toolbar input{border:1px solid var(--line);border-radius:8px;padding:7px 11px;font-size:13px;outline:none;min-width:200px;flex:1;max-width:340px}
+.toolbar input:focus{border-color:#1d4d8a;box-shadow:0 0 0 3px rgba(29,78,216,.1)}
+.toolbar a{color:var(--muted);font-size:12.5px;text-decoration:none;border:1px solid var(--line);padding:6px 12px;border-radius:8px;white-space:nowrap}
+.toolbar a:hover{border-color:#1d4d8a;color:#1d4d8a}
+.updated{font-size:11.5px;color:#93a1b3;white-space:nowrap}
+
+.wrap{max-width:1240px;margin:0 auto;padding:22px 16px 60px}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+@media(max-width:960px){.grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:620px){.grid{grid-template-columns:1fr}}
+
+.cat-card{background:var(--c-light);border:1.5px solid var(--c-dark);border-radius:4px;overflow:hidden;cursor:pointer;transition:transform .15s,box-shadow .15s}
+.cat-card:hover{transform:translateY(-3px);box-shadow:0 8px 22px rgba(0,0,0,.12)}
+.cat-hd{background:var(--c-dark);color:#fff;padding:12px 16px;display:flex;align-items:center;gap:10px;font-size:19px;font-weight:800;letter-spacing:1.5px}
+.cat-hd .emo{font-size:22px;line-height:1}
+.cat-sub{background:var(--c-light);color:var(--c-sub);text-align:center;padding:7px 10px;font-size:13.5px;border-bottom:1px solid #fff}
+.cat-count{background:#fff;color:var(--c-acc);text-align:center;padding:8px 10px;font-size:14px;font-weight:600}
+.cat-count b{font-size:15px;font-weight:800}
+.cat-link{background:#fff;color:var(--c-link);text-align:center;padding:8px 10px;font-size:13px}
+
+.detail-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+.back{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line);background:#fff;padding:7px 14px;border-radius:8px;font-size:13px;color:var(--muted);cursor:pointer}
+.back:hover{border-color:#1d4d8a;color:#1d4d8a}
+.detail-hd{background:var(--c-dark);color:#fff;border-radius:6px;padding:18px 22px;margin-bottom:18px;display:flex;align-items:center;gap:14px;box-shadow:var(--shadow)}
+.detail-hd .emo{font-size:30px}
+.detail-hd h2{margin:0 0 3px;font-size:21px;font-weight:800;letter-spacing:1px}
+.detail-hd p{margin:0;font-size:13px;opacity:.9}
+
+.prod-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:18px}
+@media(max-width:900px){.prod-grid{grid-template-columns:1fr}}
+.prod-card{background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden;box-shadow:var(--shadow);display:flex;flex-direction:column}
+.prod-card:hover{box-shadow:0 6px 18px rgba(0,0,0,.10);border-color:#c8d6ea}
+.prod-img{aspect-ratio:4/3;background:linear-gradient(135deg,#f3f6fa,#e9eef5);display:flex;align-items:center;justify-content:center;overflow:hidden}
+.prod-img img{width:100%;height:100%;object-fit:contain;display:block}
+.prod-body{padding:14px 16px 16px;flex:1}
+.prod-body h4{margin:0 0 8px;font-size:16px;font-weight:700;line-height:1.4}
+.prod-body h4:empty{display:none}
+.insurer{display:inline-block;background:var(--c-light,#eef2f8);color:var(--c-sub,#456);font-size:12px;font-weight:600;padding:2px 9px;border-radius:20px;margin-bottom:9px}
+.field{margin-bottom:7px;font-size:13px;line-height:1.65;display:flex;gap:7px}
+.field .k{color:#8b98ab;flex-shrink:0;min-width:56px}
+.field .v{color:#2b3745;flex:1;white-space:pre-wrap}
+.fee{background:#f6f9ff;border:1px solid #dde7fb;border-radius:7px;padding:7px 11px;margin-bottom:9px;font-size:13px;color:#1d4d8a;font-weight:600}
+.hl{background:#f8fafc;border-left:3px solid var(--c-dark,#1d4d8a);border-radius:0 6px 6px 0;padding:8px 11px;margin-bottom:9px;font-size:13px;line-height:1.7;color:#334254}
+.notice{background:#fff8ec;border-left:3px solid #d99a2b;border-radius:0 6px 6px 0;padding:8px 11px;margin-top:9px;font-size:12.5px;line-height:1.7;color:#7a5a1a}
+.note{background:#f6f8fa;border-radius:6px;padding:7px 11px;margin-top:8px;font-size:12.5px;line-height:1.65;color:#5a6b80}
+
+.empty{text-align:center;padding:70px 20px;color:var(--muted);font-size:13.5px}
+.loading{text-align:center;padding:70px 20px;color:var(--muted)}
+.err{text-align:center;padding:70px 20px;color:#b82020}
+.tip{margin-top:28px;background:#fff;border:1px dashed #d7e0ec;border-radius:10px;padding:13px 16px;font-size:12.5px;color:var(--muted);line-height:1.8}
+.tip b{color:var(--txt)}
+@media print{.toolbar,.back{display:none!important}.cat-card,.prod-card{break-inside:avoid}}
+</style>
+</head>
+<body>
+
+<header class="site">
+  <div class="title-bar">
+    <h1>非车险产品浏览目录</h1>
+    <p id="subtitle">代理 / 业务员专用 · 点击卡片查看详情</p>
+  </div>
+  <div class="toolbar">
+    <input id="q" type="search" placeholder="搜索产品名称 / 保险公司 / 保障亮点…">
+    <span class="spacer"></span>
+    <span class="updated" id="updated"></span>
+    <a href="./admin.html">⚙ 后台管理</a>
+  </div>
+</header>
+
+<div class="wrap" id="app"><div class="loading">正在加载产品数据…</div></div>
+
+<script src="./supabase-config.js"></script>
+<script>
+const API = './catalog.json';
+let DB = { categories: [] };
+let view = { name: 'home' };
+let KW = '';
+
+function esc(s){const M={'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'};
+  return String(s==null?'':s).replace(/[&<>"]/g,c=>M[c]);}
+
+function fmtTime(iso){
+  if(!iso) return '';
+  const d = new Date(iso);
+  if(isNaN(d)) return '';
+  const p = n => String(n).padStart(2,'0');
+  return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes());
+}
+
+function applyDB(){
+  document.getElementById('updated').textContent = DB.updatedAt ? ('更新于 '+fmtTime(DB.updatedAt)) : '';
+  const n = (DB.categories||[]).length;
+  document.getElementById('subtitle').textContent =
+    '代理 / 业务员专用 · 共 '+n+' 大类 · 点击卡片查看详情';
+}
+function sbCfg(){
+  const c = Object.assign({}, (window.SUPABASE||{}));
+  try{ const ls=JSON.parse(localStorage.getItem('fxy_supabase_cfg')||'{}'); if(ls && ls.url) Object.assign(c, ls); }catch(e){}
+  if(c.url) c.url = String(c.url).replace(/\/rest\/v1\/?$/,'').replace(/\/+$/,'');
+  return c;
+}
+async function loadSb(){
+  const c = sbCfg();
+  if(!c.url || !c.key) return null;
+  const r = await fetch(c.url.replace(/\/+$/,'')+'/rest/v1/'+(c.table||'catalog')+'?select=data&id=eq.1',
+    { headers:{ apikey:c.key, Authorization:'Bearer '+c.key } });
+  if(!r.ok) throw new Error('Supabase HTTP '+r.status);
+  const j = await r.json();
+  return (j && j[0] && j[0].data && (j[0].data.categories||[]).length) ? j[0].data : null;
+}
+async function load(){
+  if(window.__CAT__){ DB = window.__CAT__; applyDB(); render(); return; }
+  try{
+    const sb = await loadSb().catch(()=>null);
+    if(sb){ DB = sb; applyDB(); render(); return; }
+    const r = await fetch(API, { cache: 'no-store' });
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    DB = await r.json();
+    applyDB();
+    render();
+  }catch(e){
+    document.getElementById('app').innerHTML =
+      '<div class="err">数据加载失败：'+esc(e.message)+'<br><br>请确认 catalog.json 与 index.html 在同一目录。</div>';
+  }
+}
+
+function matchP(p){
+  if(!KW) return true;
+  const k = KW.toLowerCase();
+  return [p.name,p.insurer,p.highlight,p.premium,p.scene,p.note,p.company,p.area,p.notice,p.feature]
+    .join(' ').toLowerCase().indexOf(k) >= 0;
+}
+
+function parseHash(){
+  const h = (location.hash||'').replace(/^#\/?/,'').split('/');
+  if(h[0]==='cat' && h[1]) return { name:'cat', id:h[1] };
+  return { name:'home' };
+}
+window.addEventListener('hashchange', ()=>{ view=parseHash(); render(); window.scrollTo(0,0); });
+function go(p){ location.hash = '#/'+p; }
+
+function render(){
+  const app = document.getElementById('app');
+  if(view.name==='cat'){
+    const c = DB.categories.find(x=>x.id===view.id);
+    if(c){ app.innerHTML = renderCat(c); return; }
+  }
+  app.innerHTML = renderHome();
+}
+
+function renderHome(){
+  if(!DB.categories.length) return '<div class="empty">暂无产品数据</div>';
+  let h = '<div class="grid">';
+  DB.categories.forEach(c=>{
+    const list = c.products.filter(matchP);
+    if(KW && !list.length && !c.name.includes(KW)) return;
+    const col = c.color || {};
+    h += '<article class="cat-card" style="--c-dark:'+(col.dark||'#1d4d8a')+
+         ';--c-light:'+(col.light||'#dbe6f4')+';--c-sub:'+(col.sub||'#2a4f76')+
+         ';--c-acc:'+(col.acc||'#2a72c6')+';--c-link:'+(col.link||'#2a72c6')+
+         '" data-cat="'+esc(c.id)+'">';
+    h += '<div class="cat-hd"><span class="emo">'+esc(c.emoji||'📦')+'</span><span>'+esc(c.name)+'</span></div>';
+    h += '<div class="cat-sub">'+esc(c.tagline||'')+'</div>';
+    h += '<div class="cat-count">收录 <b>'+(KW?list.length:c.products.length)+'</b> 款产品</div>';
+    h += '<div class="cat-link">🔍 点击查看详情 →</div>';
+    h += '</article>';
+  });
+  h += '</div>';
+  h += '<div class="tip"><b>说明：</b>保费与保障内容仅供参考，实际以保险公司核保报价为准。'+
+       '需要修改产品或图片，请点击右上角「⚙ 后台管理」登录后操作（修改后导出 catalog.json 重新发布即可生效）。</div>';
+  return h;
+}
+
+function renderCat(c){
+  const col = c.color || {};
+  const style = '--c-dark:'+(col.dark||'#1d4d8a')+';--c-light:'+(col.light||'#dbe6f4')+
+                ';--c-sub:'+(col.sub||'#2a4f76');
+  let h = '<div class="detail-bar"><button class="back" data-go="home">← 返回目录</button></div>';
+  h += '<div class="detail-hd" style="'+style+'"><span class="emo">'+esc(c.emoji||'📦')+'</span>'+
+       '<div><h2>'+esc(c.name)+'</h2><p>'+esc(c.tagline||'')+' · 共 '+c.products.length+' 款产品</p></div></div>';
+
+  const list = c.products.filter(matchP);
+  if(!list.length){
+    h += '<div class="empty">没有匹配「'+esc(KW)+'」的产品</div>';
+    return h;
+  }
+  h += '<div class="prod-grid">';
+  list.forEach(p=>{ h += renderProd(p, c); });
+  h += '</div>';
+  return h;
+}
+
+function field(k, v){
+  if(!v) return '';
+  return '<div class="field"><span class="k">'+esc(k)+'</span><span class="v">'+esc(v)+'</span></div>';
+}
+
+function renderProd(p, c){
+  const col = c.color || {};
+  const style = '--c-dark:'+(col.dark||'#1d4d8a')+';--c-light:'+(col.light||'#dbe6f4')+
+                ';--c-sub:'+(col.sub||'#2a4f76');
+  let h = '<article class="prod-card" style="'+style+'">';
+  if(p.image){
+    h += '<div class="prod-img"><img src="'+esc(p.image)+'" alt="'+esc(p.name||'产品图')+'" loading="lazy"></div>';
+  }
+  h += '<div class="prod-body">';
+  const title = p.name || p.company || '';
+  if(title) h += '<h4>'+esc(title)+'</h4>';
+  const ins = p.insurer || p.company || '';
+  if(ins && ins !== title) h += '<span class="insurer">'+esc(ins)+'</span>';
+  if(p.premium) h += '<div class="fee">💰 参考保费：'+esc(p.premium)+'</div>';
+  if(p.highlight) h += '<div class="hl">'+esc(p.highlight)+'</div>';
+  if(p.feature) h += field('产品特色', p.feature);
+  if(p.scene) h += field('适用场景', p.scene);
+  if(p.area) h += field('销售区域', p.area);
+  if(p.notice) h += '<div class="notice">📋 投保须知：'+esc(p.notice)+'</div>';
+  if(p.note) h += '<div class="note">备注：'+esc(p.note)+'</div>';
+  h += '</div></article>';
+  return h;
+}
+
+document.addEventListener('click', e=>{
+  const card = e.target.closest('.cat-card');
+  if(card){ go('cat/'+card.dataset.cat); return; }
+  if(e.target.closest('[data-go="home"]')){ go('home'); return; }
+});
+
+let timer;
+document.getElementById('q').addEventListener('input', e=>{
+  clearTimeout(timer);
+  timer = setTimeout(()=>{ KW = e.target.value.trim(); render(); }, 200);
+});
+
+view = parseHash();
+load();
+</script>
+</body>
+</html>
