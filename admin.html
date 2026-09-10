@@ -101,6 +101,15 @@ button,input,textarea{font-family:inherit}
 .modal-box .m-status.ok{color:#0f7b4f}
 .modal-box .m-status.err{color:#b82020}
 .modal-box .m-status.ing{color:var(--brand)}
+.prow{display:flex;gap:6px;align-items:center;margin-bottom:8px;flex-wrap:wrap}
+.prow input{width:auto;border:1px solid var(--line);border-radius:7px;padding:7px 9px;font-size:13px;outline:none}
+.prow input:focus{border-color:var(--brand);box-shadow:0 0 0 3px rgba(29,78,216,.1)}
+.prow .pcode{width:106px;font-weight:700;letter-spacing:2px;text-align:center;background:#f6f8fb}
+.prow .plabel{flex:1;min-width:130px}
+.prow button{border:1px solid var(--line);background:#fff;border-radius:7px;padding:6px 10px;font-size:12px;cursor:pointer}
+.prow button.on{border-color:#0f7b4f;color:#0f7b4f;font-weight:600}
+.prow button.off{border-color:#b82020;color:#b82020;font-weight:600}
+.prow button.del:hover{border-color:#b82020;color:#b82020}
 </style>
 </head>
 <body>
@@ -111,11 +120,11 @@ button,input,textarea{font-family:inherit}
     <div class="sub">后台管理（纯静态版）· 请登录</div>
     <div class="login-err" id="loginErr"></div>
     <label>管理员账号</label>
-    <input type="text" id="lu" autocomplete="username" placeholder="admin">
+    <input type="text" id="lu" autocomplete="username" placeholder="seeyoulook@qq.com">
     <label>密码</label>
     <input type="password" id="lp" autocomplete="current-password" placeholder="请输入密码">
     <button class="btn" id="loginBtn">登 录</button>
-    <div class="hint" style="margin-top:16px;margin-bottom:0">默认账号 <b>admin</b> / 密码 <b>admin888</b>。改完内容后点顶栏「☁ GitHub 发布」，即可写回仓库并自动更新线上，无需重新部署。</div>
+    <div class="hint" style="margin-top:16px;margin-bottom:0">账号 <b>seeyoulook@qq.com</b> ／ 密码 <b>admin888</b>（登录后可在顶栏「🔑 修改密码」自行更改）。改完内容点顶栏「☁ 发布到线上」→「🚀 发布到 Supabase」即可即时生效。</div>
   </div>
 </div>
 
@@ -129,7 +138,8 @@ button,input,textarea{font-family:inherit}
     <button id="pwdBtn">🔑 修改密码</button>
     <button id="exportCatBtn">⬇ 导出 catalog.json</button>
     <button id="exportSingleBtn">📦 导出单文件版</button>
-    <button id="ghBtn">☁ GitHub 发布</button>
+    <button id="passBtn">🔑 查看密码</button>
+    <button id="ghBtn">☁ 发布到线上</button>
     <button id="logoutBtn">退出</button>
   </div>
   <div class="main">
@@ -168,6 +178,19 @@ button,input,textarea{font-family:inherit}
     </div>
     <div id="sbStatus" class="m-status"></div>
     <div id="ghStatus" class="m-status"></div>
+  </div>
+</div>
+
+<div id="passModal" class="modal" style="display:none">
+  <div class="modal-box">
+    <h3>🔑 手续费查看密码</h3>
+    <p class="m-sub">生成 4-6 位数字密码发给不同人群，对方在前台「手续费」开关输入即可查看费率。<b>最多 10 组</b>；把某组设为「失效」后，用过它的人刷新页面会自动重新锁定。</p>
+    <div id="passList"></div>
+    <div class="m-actions">
+      <button id="passGen" class="primary">＋ 生成新密码</button>
+      <button id="passClose" class="ghost">完成</button>
+    </div>
+    <div id="passStatus" class="m-status"></div>
   </div>
 </div>
 
@@ -216,7 +239,7 @@ function showAdmin(){ $('#loginView').style.display='none'; $('#adminView').styl
 async function doLogin(){
   const u=$('#lu').value.trim(), p=$('#lp').value;
   $('#loginErr').style.display='none';
-  if(u!=='admin'){ $('#loginErr').textContent='账号错误（默认 admin）'; $('#loginErr').style.display='block'; return; }
+  if(u!=='seeyoulook@qq.com'){ $('#loginErr').textContent='账号错误'; $('#loginErr').style.display='block'; return; }
   if(!p){ $('#loginErr').textContent='请输入密码'; $('#loginErr').style.display='block'; return; }
   const btn=$('#loginBtn'); btn.disabled=true; btn.textContent='登录中…';
   try{
@@ -429,7 +452,8 @@ function download(text, name, type){
 }
 function buildData(){
   return { version:(DB.version||1), updatedAt:new Date().toISOString(),
-           categories:DB.categories, source:'static-admin-export' };
+           categories:DB.categories, viewPasscodes:(DB.viewPasscodes||[]),
+           source:'static-admin-export' };
 }
 $('#exportCatBtn').onclick=()=>{
   download(JSON.stringify(buildData(),null,2),'catalog.json','application/json');
@@ -579,6 +603,64 @@ async function sbPublish(){
 $('#sbSaveCfg').onclick=()=>{ sbSaveCfg().then(ok=>{ if(ok) toast('Supabase 配置已保存（本机）','ok'); }); };
 $('#sbPublish').onclick=sbPublish;
 $('#ghBtn').onclick=()=>{ fillGh(); fillSb(); $('#ghModal').style.display='flex'; $('#ghStatus').textContent=''; $('#sbStatus').textContent=''; };
+
+/* ================= 查看密码管理 ================= */
+function ensurePass(){ if(!Array.isArray(DB.viewPasscodes)) DB.viewPasscodes=[]; return DB.viewPasscodes; }
+function genPassCode(){
+  let s='';
+  const len = 4 + Math.floor(Math.random()*3); // 4~6 位
+  for(let i=0;i<len;i++) s += String(Math.floor(Math.random()*10));
+  return s;
+}
+function renderPass(){
+  const arr = ensurePass();
+  const box = $('#passList');
+  if(!arr.length){
+    box.innerHTML = '<div class="m-status">还没有生成任何密码，点「＋ 生成新密码」创建。</div>';
+  }else{
+    let h='';
+    arr.forEach((x,i)=>{
+      const on = (x.enabled !== false);
+      h += '<div class="prow">'+
+           '<input class="pcode" value="'+esc(x.code)+'" readonly>'+
+           '<input class="plabel" data-pi="'+i+'" placeholder="人群备注（如：中介A组）" value="'+esc(x.label||'')+'">'+
+           '<button class="'+(on?'on':'off')+'" data-ptog="'+i+'">'+(on?'有效':'已失效')+'</button>'+
+           '<button class="del" data-pdel="'+i+'">删除</button>'+
+           '</div>';
+    });
+    box.innerHTML = h;
+  }
+  const g=$('#passGen');
+  g.disabled = arr.length >= 10;
+  g.textContent = arr.length >= 10 ? '已达上限（10 组）' : '＋ 生成新密码';
+}
+$('#passBtn').onclick=()=>{ ensurePass(); renderPass(); $('#passStatus').textContent=''; $('#passModal').style.display='flex'; };
+$('#passClose').onclick=()=>{ $('#passModal').style.display='none'; };
+$('#passModal').addEventListener('click',e=>{ if(e.target.id==='passModal') $('#passModal').style.display='none'; });
+$('#passGen').onclick=()=>{
+  const arr=ensurePass();
+  if(arr.length>=10){ toast('最多 10 组密码','err'); return; }
+  arr.push({ id:'pc'+Date.now().toString(36), code:genPassCode(), label:'', enabled:true,
+             createdAt:new Date().toISOString() });
+  markDirty(); renderPass();
+  toast('已生成新密码，记得点「🚀 发布到 Supabase」生效','ok');
+};
+$('#passList').addEventListener('click',e=>{
+  const t=e.target.closest('[data-ptog]');
+  if(t){ const i=+t.dataset.ptog; const arr=ensurePass();
+    arr[i].enabled = (arr[i].enabled===false); markDirty(); renderPass();
+    toast(arr[i].enabled?'该密码已恢复有效':'该密码已失效，对方刷新后自动锁定','ok'); return; }
+  const d=e.target.closest('[data-pdel]');
+  if(d){ const i=+d.dataset.pdel;
+    if(!confirm('删除这组密码？使用过它的人将无法查看手续费。')) return;
+    ensurePass().splice(i,1); markDirty(); renderPass(); return; }
+});
+$('#passList').addEventListener('input',e=>{
+  const el=e.target.closest('[data-pi]');
+  if(!el) return;
+  ensurePass()[+el.dataset.pi].label = el.value;
+  markDirty();
+});
 
 /* ================= 启动 ================= */
 $('#loginBtn').onclick=doLogin;
