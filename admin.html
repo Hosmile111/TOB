@@ -307,11 +307,15 @@ async function initAdmin(){
   if(!(DB.categories||[]).length){ await loadBaseData(); }
   const saved = localStorage.getItem(LS_WORK);
   if(saved){
-    try{ DB=JSON.parse(saved); toast('已恢复本机未发布的修改','ok'); }
-    catch(e){ DB=base||{categories:[]}; }
-  } else {
-    DB=base||{categories:[]};
+    try{
+      const local = JSON.parse(saved);
+      if(local && (local.categories||[]).length){
+        DB = local;
+        toast('已恢复本机未发布的修改','ok');
+      }
+    }catch(e){}
   }
+  if(!DB || !(DB.categories||[]).length) DB = {categories:[]};
   showAdmin();
   cur = DB.categories[0] ? DB.categories[0].id : '';
   renderSide(); renderContent();
