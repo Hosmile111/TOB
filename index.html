@@ -131,14 +131,14 @@ header.site{position:sticky;top:0;z-index:50;background:var(--bg);border-bottom:
     <input id="q" type="search" placeholder="搜索产品名称 / 保险公司 / 保障亮点…">
     <span class="spacer"></span>
     <span class="updated" id="updated"></span>
-    <button type="button" id="feeSw" class="fee-sw" aria-pressed="false" title="输入密码后显示手续费率"><span class="knob"></span><span>手续费</span></button>
+    <button type="button" id="feeSw" class="fee-sw" aria-pressed="false" title="输入密码后显示费率"><span class="knob"></span></button>
   </div>
 </header>
 
 <div id="feeMask" class="fmask" style="display:none">
   <div class="fbox">
-    <h3>🔒 查看手续费率</h3>
-    <p>请输入管理员提供的查看密码，验证后即可显示手续费率。<br>如无密码，请联系微信：<b>Bigmangolike</b></p>
+    <h3>🔒 查看费率</h3>
+    <p>请输入管理员提供的查看密码，验证后即可显示费率。<br>如无密码，请联系微信：<b>Bigmangolike</b></p>
     <input id="feeInput" type="password" inputmode="numeric" maxlength="6" placeholder="••••" autocomplete="off">
     <div class="msg" id="feeMsg"></div>
     <div class="acts">
@@ -212,8 +212,7 @@ function updateFeeSw(){
   if(!b) return;
   b.classList.toggle('on', FEE_ON);
   b.setAttribute('aria-pressed', FEE_ON?'true':'false');
-  const t=b.querySelector('span:last-child');
-  if(t) t.textContent = FEE_ON ? '手续费 ✓' : '手续费';
+  // 按钮仅含 .knob 视觉元件，无文字标签；状态由 .on class + aria-pressed 体现
 }
 function sbCfg(){
   const c = Object.assign({}, (window.SUPABASE||{}));
