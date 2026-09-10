@@ -111,15 +111,12 @@ header.site{position:sticky;top:0;z-index:50;background:var(--bg);border-bottom:
 .fbox .acts button{flex:1;border:1px solid var(--line);background:#fff;padding:10px;border-radius:8px;font-size:13px;cursor:pointer}
 .fbox .acts button.pri{background:#1d4d8a;color:#fff;border-color:#1d4d8a;font-weight:700}
 .fbox .msg{margin-top:10px;font-size:12.5px;min-height:18px;color:#b82020}
-/* 双手续费区域：保留两条 row 的占位空间，未授权那条 visibility:hidden */
-.fee2{display:flex;gap:14px 22px;margin-bottom:9px;padding:9px 12px;background:#f6f9ff;border:1px solid #dde7fb;border-radius:7px;font-size:13px;flex-wrap:wrap}
-.fee2 .fee-row{display:inline-flex;align-items:center;gap:7px}
-.fee2 .ftag{padding:2px 9px;border-radius:10px;font-size:11px;font-weight:700;letter-spacing:.5px;line-height:1.5}
-.fee2 .tag-a{background:#dbe6f4;color:#1d4d8a}
-.fee2 .tag-c{background:#fde9d2;color:#ad6500}
-.fee2 .fval{font-weight:600;color:#1a3a5a;font-variant-numeric:tabular-nums}
-.fee2 .is-hidden{visibility:hidden;height:0;margin:0;padding:0;overflow:hidden}
-@media(max-width:620px){.fee2{gap:10px 14px;padding:7px 10px;font-size:12.5px}.fee2 .ftag{padding:2px 7px;font-size:10.5px}}
+/* 手续费区域：按密码 audience 仅展示对应一条；不显示业务员/客户/渠道字眼，仅显示数字 */
+.fee2{display:flex;gap:0 12px;margin-bottom:9px;padding:9px 12px;background:#f6f9ff;border:1px solid #dde7fb;border-radius:7px;font-size:13.5px;flex-wrap:wrap;align-items:center}
+.fee2 .fee-row{display:inline-flex;align-items:center;font-weight:600;color:#1a3a5a;font-variant-numeric:tabular-nums;font-size:14px}
+.fee2 .fee-row:not(.is-hidden):not(:last-child)::after{content:'·';color:#9bb0c8;margin-left:12px;font-weight:400;font-size:13px}
+.fee2 .is-hidden{display:none}
+@media(max-width:620px){.fee2{gap:6px 10px;padding:7px 10px;font-size:12.5px}.fee2 .fee-row{font-size:13px}}
 @media print{.toolbar,.back{display:none!important}.cat-card,.prod-card{break-inside:avoid}.fee2{border-color:#888;background:transparent}}
 </style>
 </head>
@@ -180,7 +177,7 @@ function applyDB(){
 
 /* ===== 手续费开关：双手续费（业务员 / 客户），按密码组 audience 控制可见性 ===== */
 let FEE_ON = false;
-let FEE_AUDIENCE = 'none'; // 'agent'|'client'|'both'|'none'
+let FEE_AUDIENCE = 'none'; // 'agent'|'client'|'channel'|'both'|'none'
 function passcodes(){ return (DB.viewPasscodes||[]).filter(x=>x && x.enabled && x.code); }
 function maskRate(s){ return String(s==null?'':s).replace(/\d+(?:\.\d+)?\s*%/g, '**%'); }
 function F(s){ return FEE_ON ? s : maskRate(s); }
@@ -395,13 +392,13 @@ function renderProd(p, c){
   const ins = p.insurer || p.company || '';
   if(ins && ins !== title) h += '<span class="insurer">'+esc(F(ins))+'</span>';
   if(p.premium) h += '<div class="fee">💰 参考保费：'+esc(F(p.premium))+'</div>';
-  // 双手续费（业务员 / 客户），仅在产品录入了任一费率时显示
-  if(p.feeAgent || p.feeClient){
-    const aVis = FEE_ON && (FEE_AUDIENCE==='both' || FEE_AUDIENCE==='agent');
-    const cVis = FEE_ON && (FEE_AUDIENCE==='both' || FEE_AUDIENCE==='client');
+  // 三类手续费（渠道 / 业务员 / 客户），按密码 audience 仅展示对应的那一条；其他行 display:none 隐藏；不显示字眼
+  if((p.feeAgent || p.feeClient || p.feeChannel) && FEE_ON){
+    const rowVis = f => FEE_AUDIENCE==='both' || FEE_AUDIENCE===f;
     h += '<div class="fee2">'+
-         '<div class="fee-row agent'+(aVis?'':' is-hidden')+'"><span class="ftag tag-a">业务员手续费</span><span class="fval">'+esc(F2('agent',p.feeAgent))+'</span></div>'+
-         '<div class="fee-row client'+(cVis?'':' is-hidden')+'"><span class="ftag tag-c">客户手续费</span><span class="fval">'+esc(F2('client',p.feeClient))+'</span></div>'+
+         '<div class="fee-row agent'+(rowVis('agent')?'':' is-hidden')+'"><span class="fval">'+esc(F2('agent',p.feeAgent))+'</span></div>'+
+         '<div class="fee-row client'+(rowVis('client')?'':' is-hidden')+'"><span class="fval">'+esc(F2('client',p.feeClient))+'</span></div>'+
+         '<div class="fee-row channel'+(rowVis('channel')?'':' is-hidden')+'"><span class="fval">'+esc(F2('channel',p.feeChannel))+'</span></div>'+
          '</div>';
   }
   if(p.highlight) h += '<div class="hl">'+esc(F(p.highlight))+'</div>';
