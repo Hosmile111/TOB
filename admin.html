@@ -110,6 +110,31 @@ button,input,textarea{font-family:inherit}
 .prow button.on{border-color:#0f7b4f;color:#0f7b4f;font-weight:600}
 .prow button.off{border-color:#b82020;color:#b82020;font-weight:600}
 .prow button.del:hover{border-color:#b82020;color:#b82020}
+
+/* 手机端后台优化 */
+@media(max-width:760px){
+  .main{flex-direction:column}
+  .side{width:100%;position:static;max-height:none;border-right:0;border-bottom:1px solid var(--line);
+        display:flex;overflow-x:auto;padding:6px 0;gap:2px}
+  .side .st{display:none}
+  .side a{flex:0 0 auto;border-left:0;border-bottom:3px solid transparent;padding:8px 14px;white-space:nowrap}
+  .side a.on{border-left:0;border-bottom-color:#1d4d8a;background:transparent}
+  .content{padding:12px}
+  .topbar{padding:10px 12px;gap:6px}
+  .topbar h1{font-size:15px;width:100%}
+  .topbar .spacer{display:none}
+  .topbar button{padding:6px 10px;font-size:12px}
+  .pcard{padding:12px}
+  .pbody{gap:12px}
+  .imgbox{width:100%}
+  .imgbox .prev{width:100%;height:auto;aspect-ratio:4/3}
+  .fields{grid-template-columns:1fr}
+  .modal-box{padding:18px}
+  .prow{gap:5px}
+  .prow .pcode{width:92px}
+  .prow .plabel{min-width:100px}
+  .dirty{font-size:11px}
+}
 </style>
 </head>
 <body>
@@ -120,11 +145,10 @@ button,input,textarea{font-family:inherit}
     <div class="sub">后台管理（纯静态版）· 请登录</div>
     <div class="login-err" id="loginErr"></div>
     <label>管理员账号</label>
-    <input type="text" id="lu" autocomplete="username" placeholder="seeyoulook@qq.com">
+    <input type="text" id="lu" autocomplete="username" placeholder="请输入管理员账号">
     <label>密码</label>
     <input type="password" id="lp" autocomplete="current-password" placeholder="请输入密码">
     <button class="btn" id="loginBtn">登 录</button>
-    <div class="hint" style="margin-top:16px;margin-bottom:0">账号 <b>seeyoulook@qq.com</b> ／ 密码 <b>admin888</b>（登录后可在顶栏「🔑 修改密码」自行更改）。改完内容点顶栏「☁ 发布到线上」→「🚀 发布到 Supabase」即可即时生效。</div>
   </div>
 </div>
 
@@ -243,9 +267,11 @@ async function doLogin(){
   if(!p){ $('#loginErr').textContent='请输入密码'; $('#loginErr').style.display='block'; return; }
   const btn=$('#loginBtn'); btn.disabled=true; btn.textContent='登录中…';
   try{
+    await loadBaseData();
     await ensureDefaultPw();
     const h=await sha256(p);
-    if(h!==getPwHash()) throw new Error('密码错误');
+    const online=(DB.adminPassHash||'');
+    if(online ? (h!==online) : (h!==getPwHash())) throw new Error('密码错误');
     await initAdmin();
   }catch(e){
     $('#loginErr').textContent=e.message; $('#loginErr').style.display='block';
@@ -253,12 +279,17 @@ async function doLogin(){
 }
 
 /* ================= 载入数据 ================= */
-async function initAdmin(){
+async function loadBaseData(){
   let base=null;
   try{ base = await sbLoad(); }catch(e){}
   if(!base || !(base.categories||[]).length){
     try{ base = await (await fetch('./catalog.json',{cache:'no-store'})).json(); }catch(e){}
   }
+  if(base) DB = base;
+  return DB;
+}
+async function initAdmin(){
+  if(!(DB.categories||[]).length){ await loadBaseData(); }
   const saved = localStorage.getItem(LS_WORK);
   if(saved){
     try{ DB=JSON.parse(saved); toast('已恢复本机未发布的修改','ok'); }
@@ -453,7 +484,7 @@ function download(text, name, type){
 function buildData(){
   return { version:(DB.version||1), updatedAt:new Date().toISOString(),
            categories:DB.categories, viewPasscodes:(DB.viewPasscodes||[]),
-           source:'static-admin-export' };
+           adminPassHash:(DB.adminPassHash||''), source:'static-admin-export' };
 }
 $('#exportCatBtn').onclick=()=>{
   download(JSON.stringify(buildData(),null,2),'catalog.json','application/json');
@@ -503,10 +534,20 @@ $('#pwdBtn').onclick=async ()=>{
   if(newP2===null) return;
   if(newP!==newP2){ alert('两次输入不一致'); return; }
   try{
+    if(!(DB.categories||[]).length) await loadBaseData();
+    const online=(DB.adminPassHash||'');
     const oldH=await sha256(oldP);
-    if(oldH!==getPwHash()){ alert('原密码错误'); return; }
-    localStorage.setItem(LS_PW, await sha256(newP));
-    toast('密码已修改（本机生效）','ok');
+    if(online ? (oldH!==online) : (oldH!==getPwHash())){ alert('原密码错误'); return; }
+    const newHash=await sha256(newP);
+    localStorage.setItem(LS_PW, newHash);
+    DB.adminPassHash = newHash;
+    markDirty();
+    try{
+      await pushToSupabase();
+      toast('密码已修改，并已同步到线上（所有设备生效）','ok');
+    }catch(e2){
+      toast('密码已改（本机生效），同步失败：'+e2.message+'，请点「☁ 发布到线上」手动发布','err');
+    }
   }catch(e){ alert('修改失败：'+e.message); }
 };
 
@@ -603,6 +644,19 @@ async function sbPublish(){
 $('#sbSaveCfg').onclick=()=>{ sbSaveCfg().then(ok=>{ if(ok) toast('Supabase 配置已保存（本机）','ok'); }); };
 $('#sbPublish').onclick=sbPublish;
 $('#ghBtn').onclick=()=>{ fillGh(); fillSb(); $('#ghModal').style.display='flex'; $('#ghStatus').textContent=''; $('#sbStatus').textContent=''; };
+
+/* 直接把当前数据（含密码哈希 / 查看密码）推送到 Supabase，不依赖弹窗输入 */
+async function pushToSupabase(){
+  const c = sbCfgAdmin();
+  if(!c.url || !c.key) throw new Error('未配置 Supabase');
+  const r = await fetch(c.url.replace(/\/+$/,'')+'/rest/v1/'+(c.table||'catalog')+'?id=eq.1', {
+    method:'PATCH',
+    headers:{apikey:c.key,Authorization:'Bearer '+c.key,'Content-Type':'application/json',Prefer:'return=minimal'},
+    body:JSON.stringify({data:buildData(),updated_at:new Date().toISOString()})
+  });
+  if(!r.ok){ const t=await r.text(); throw new Error((t||'').slice(0,150)||('HTTP '+r.status)); }
+  return true;
+}
 
 /* ================= 查看密码管理 ================= */
 function ensurePass(){ if(!Array.isArray(DB.viewPasscodes)) DB.viewPasscodes=[]; return DB.viewPasscodes; }
