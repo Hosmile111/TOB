@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>后台管理 · 非车险产品目录（纯静态版）</title>
+<title>后台管理 · 非车险产品目录（实时同步版）</title>
 <style>
 :root{--bg:#f3f5f8;--line:#e2e7ee;--txt:#1b2430;--muted:#6b7a8d;--brand:#1d4d8a}
 *{box-sizing:border-box}
@@ -142,7 +142,7 @@ button,input,textarea{font-family:inherit}
 <div id="loginView" class="login-wrap" style="display:none">
   <div class="login-box">
     <h2>非车险产品目录</h2>
-    <div class="sub">后台管理（纯静态版）· 请登录</div>
+    <div class="sub">后台管理 · 请登录</div>
     <div class="login-err" id="loginErr"></div>
     <label>管理员账号</label>
     <input type="text" id="lu" autocomplete="username" placeholder="请输入管理员账号">
@@ -236,13 +236,28 @@ function toast(msg, kind){
   const t=$('#toast'); t.textContent=msg; t.className='toast show'+(kind?' '+kind:'');
   clearTimeout(toast._t); toast._t=setTimeout(()=>{t.className='toast';},2600);
 }
-function markDirty(){ dirty=true; $('#dirtyTip').textContent='● 有未保存的修改（本机）'; scheduleSave(); }
-let saveTimer;
+function markDirty(){ dirty=true; $('#dirtyTip').textContent='● 修改中…'; scheduleSave(); }
+let saveTimer, syncTimer;
 function scheduleSave(){
   clearTimeout(saveTimer);
   saveTimer=setTimeout(()=>{
     try{ localStorage.setItem(LS_WORK, JSON.stringify(DB)); }catch(e){}
   },400);
+  scheduleAutoSync();
+}
+/* 实时同步：停止修改约 5 秒后自动推送到 Supabase，前台刷新即可看到，无需手动点发布 */
+function scheduleAutoSync(){
+  clearTimeout(syncTimer);
+  syncTimer=setTimeout(async ()=>{
+    const tip=$('#dirtyTip');
+    try{
+      if(tip) tip.textContent='● 正在同步到线上…';
+      await pushToSupabase();
+      if(tip) tip.textContent='● 已同步 · 前台刷新即可看到';
+    }catch(e){
+      if(tip) tip.textContent='● 已存本机（自动同步失败，请点「☁ 发布到线上」）';
+    }
+  },5000);
 }
 
 /* ================= 密码 ================= */
@@ -321,7 +336,7 @@ function renderContent(){
   let h='<div class="hint"><b>'+esc(c.name)+'</b> · '+
     (isCard?'卡片式（公司 / 销售区域 / 投保须知 / 产品特色 / 产品图）'
            :'表格式（产品名称 / 保险公司 / 保障亮点 / 参考保费 / 适用场景 / 备注）')+
-    '<br>修改会自动保存在本机；要让所有访客看到，请点「⬇ 导出 catalog.json」并重新发布。</div>';
+    '<br>修改会<b>自动同步到线上</b>（停止改动约 5 秒后），前台刷新即可看到最新内容。</div>';
   h+='<button class="addbtn" id="addBtn">＋ 在「'+esc(c.name)+'」下添加一款产品</button>';
   if(!c.products.length){
     h+='<div class="hint">本分类还没有产品，点上面按钮添加。</div>';
@@ -488,7 +503,7 @@ function buildData(){
 }
 $('#exportCatBtn').onclick=()=>{
   download(JSON.stringify(buildData(),null,2),'catalog.json','application/json');
-  toast('已导出 catalog.json，重新发布后全网生效','ok');
+  toast('已导出 catalog.json（备份用；线上以自动同步为准）','ok');
 };
 $('#exportSingleBtn').onclick=async ()=>{
   try{
