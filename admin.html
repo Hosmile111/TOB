@@ -159,10 +159,9 @@ button,input,textarea{font-family:inherit}
     <h1>⚙ 产品后台管理</h1>
     <span class="dirty" id="dirtyTip"></span>
     <span class="spacer"></span>
-    <button id="previewBtn">👁 预览前台</button>
     <button id="reloadBtn">🔄 恢复云端版本</button>
+    <button id="saveBtn">💾 保存并同步</button>
     <button id="pwdBtn">🔑 修改密码</button>
-    <button id="exportCatBtn">⬇ 导出 catalog.json</button>
     <button id="exportSingleBtn">📦 导出单文件版</button>
     <button id="passBtn">🔑 查看密码</button>
     <button id="logoutBtn">退出</button>
@@ -271,12 +270,19 @@ async function doLogin(){
       btn.textContent='登录成功';
       await initAdmin();
       // 后台异步校验线上 hash（不阻塞登录）
+      // 策略：以本机为源头（用户在本机就是权威）。如果本机与线上不一致，把本机推到线上，
+      //       而不是反向覆盖本机——否则「修改了新密码」永远无法同步到所有设备
       setTimeout(async()=>{
         try{
           const sb = await sbLoad();
           if(sb && sb.adminPassHash && h !== sb.adminPassHash){
-            localStorage.setItem(LS_PW, sb.adminPassHash);
-            toast('⚠ 线上密码已变更，已自动同步本机','ok');
+            try{
+              DB.adminPassHash = h;
+              await pushToSupabase();
+              toast('⚠ 本机新密码还没同步到线上，已自动推回','ok');
+            }catch(e2){
+              toast('⚠ 本机新密码未同步到线上：'+e2.message+'，请点「💾 保存并同步」','err');
+            }
           }
         }catch(e){}
       }, 200);
@@ -541,10 +547,6 @@ function buildData(){
            categories:DB.categories, viewPasscodes:(DB.viewPasscodes||[]),
            adminPassHash:(DB.adminPassHash||''), source:'static-admin-export' };
 }
-$('#exportCatBtn').onclick=()=>{
-  download(JSON.stringify(buildData(),null,2),'catalog.json','application/json');
-  toast('已导出 catalog.json（备份用；线上以自动同步为准）','ok');
-};
 $('#exportSingleBtn').onclick=async ()=>{
   try{
     toast('正在生成单文件版（内嵌图片）…');
@@ -575,8 +577,27 @@ $('#reloadBtn').onclick=async ()=>{
   renderSide(); renderContent();
   toast('已恢复云端版本','ok');
 };
-$('#previewBtn').onclick=()=>window.open('./','_blank');
 $('#logoutBtn').onclick=()=>{ if(!dirty||confirm('有未保存的修改，确定退出？')){ showLogin(); } };
+
+/* ================= 手动保存并同步 ================= */
+$('#saveBtn').onclick=async ()=>{
+  const btn=$('#saveBtn'); const old=btn.textContent;
+  btn.disabled=true; btn.textContent='同步中…';
+  // 1) 强制刷盘 LS_WORK（草稿）
+  try{ localStorage.setItem(LS_WORK, JSON.stringify(DB)); }catch(e){}
+  // 2) 同步到 Supabase
+  try{
+    await pushToSupabase();
+    dirty=false; $('#dirtyTip').textContent='● 已同步 · 前台刷新即可看到';
+    toast('✅ 同步成功！所有设备现在能看到最新内容','ok', 3500);
+    btn.textContent='✅ 已同步'; setTimeout(()=>{ btn.textContent=old; }, 2000);
+  }catch(e){
+    toast('❌ 同步失败：'+e.message+'（请检查网络后重试）','err', 5000);
+    btn.textContent='❌ 失败'; setTimeout(()=>{ btn.textContent=old; }, 2000);
+  }finally{
+    btn.disabled=false;
+  }
+};
 
 /* ================= 修改密码 ================= */
 $('#pwdBtn').onclick=async ()=>{
@@ -599,9 +620,11 @@ $('#pwdBtn').onclick=async ()=>{
     markDirty();
     try{
       await pushToSupabase();
+      dirty=false; $('#dirtyTip').textContent='● 已同步 · 前台刷新即可看到';
       toast('密码已修改，并已同步到线上（所有设备生效）','ok');
     }catch(e2){
-      toast('密码已改（本机生效），同步失败：'+e2.message+'（请检查网络，稍后再改一次）','err');
+      // 失败不阻塞本机修改。让用户点「💾 保存并同步」重试
+      toast('密码本机已改，但同步失败：'+e2.message+'。请点「💾 保存并同步」重试','err');
     }
   }catch(e){ alert('修改失败：'+e.message); }
 };
