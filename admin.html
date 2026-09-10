@@ -3,7 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>后台管理 · 非车险产品目录（实时同步版）</title>
+<title>后台 · 非车险产品浏览目录</title>
+<link rel="preconnect" href="https://hrwezjngocxtlfsprmwk.supabase.co" crossorigin>
+<link rel="dns-prefetch" href="https://hosmile111.github.io">
 <style>
 :root{--bg:#f3f5f8;--line:#e2e7ee;--txt:#1b2430;--muted:#6b7a8d;--brand:#1d4d8a}
 *{box-sizing:border-box}
@@ -251,11 +253,43 @@ async function doLogin(){
   if(!p){ $('#loginErr').textContent='请输入密码'; $('#loginErr').style.display='block'; return; }
   const btn=$('#loginBtn'); btn.disabled=true; btn.textContent='登录中…';
   try{
-    await loadBaseData();
     await ensureDefaultPw();
     const h=await sha256(p);
+    const localOK = (h===getPwHash());
+
+    if(localOK){
+      // 路径 A：本机 hash 一致，秒进（除非还没缓存就需要先加载数据，最多 2.5s）
+      const cached = readACache();
+      if(!cached){
+        btn.textContent='载入数据…';
+        await loadBaseData();
+      }
+      if(!(DB && (DB.categories||[]).length)){
+        // 仍未拿到，去 fetch（兜底）
+        await loadBaseData();
+      }
+      btn.textContent='登录成功';
+      await initAdmin();
+      // 后台异步校验线上 hash（不阻塞登录）
+      setTimeout(async()=>{
+        try{
+          const sb = await sbLoad();
+          if(sb && sb.adminPassHash && h !== sb.adminPassHash){
+            localStorage.setItem(LS_PW, sb.adminPassHash);
+            toast('⚠ 线上密码已变更，已自动同步本机','ok');
+          }
+        }catch(e){}
+      }, 200);
+      return;
+    }
+    // 路径 B：本机不匹配，需校验线上
+    btn.textContent='正在校验线上密码…';
+    await loadBaseData();
     const online=(DB.adminPassHash||'');
-    if(online ? (h!==online) : (h!==getPwHash())) throw new Error('密码错误');
+    if(!online || h !== online) throw new Error('密码错误');
+    // 同步到本机
+    localStorage.setItem(LS_PW, online);
+    btn.textContent='登录成功';
     await initAdmin();
   }catch(e){
     $('#loginErr').textContent=e.message; $('#loginErr').style.display='block';
@@ -263,17 +297,44 @@ async function doLogin(){
 }
 
 /* ================= 载入数据 ================= */
+/* 数据加载：admin 端 localStorage 10 分钟缓存 + supabase/catalog 并发，2s 超时 */
+const A_CACHE_KEY='fxy_admin_cat_cache', A_CACHE_TTL=10*60*1000;
+function readACache(){
+  try{
+    const o=JSON.parse(localStorage.getItem(A_CACHE_KEY)||'{}');
+    if(o && o._ts && Date.now()-o._ts < A_CACHE_TTL && o.data && (o.data.categories||[]).length) return o.data;
+  }catch(e){}
+  return null;
+}
+function writeACache(data){
+  try{ localStorage.setItem(A_CACHE_KEY, JSON.stringify({_ts:Date.now(), data})); }catch(e){}
+}
 async function loadBaseData(){
-  let base=null;
-  try{ base = await sbLoad(); }catch(e){}
-  if(!base || !(base.categories||[]).length){
-    try{ base = await (await fetch('./catalog.json',{cache:'no-store'})).json(); }catch(e){}
+  const cached = readACache();
+  if(cached){ DB = cached; return DB; }
+  // 并发 supabase + catalog.json
+  let resolved=false;
+  const tryUse=(d)=>{
+    if(resolved) return;
+    if(!d || !(d.categories||[]).length) return;
+    resolved=true;
+    DB=d; writeACache(d);
+  };
+  sbLoad().then(tryUse).catch(()=>{});
+  fetch('./catalog.json',{cache:'no-store'}).then(r=>r.ok?r.json():null).then(tryUse).catch(()=>{});
+  // 等到第一个结果，最多等 2.5s（admin 比 index 更宽松一点点，给 SB 一点时间）
+  const start=Date.now();
+  while(!resolved && Date.now()-start<2500){
+    await new Promise(r=>setTimeout(r, 60));
   }
-  if(base) DB = base;
   return DB;
 }
 async function initAdmin(){
-  if(!(DB.categories||[]).length){ await loadBaseData(); }
+  if(!(DB.categories||[]).length){
+    const cached=readACache();
+    if(cached){ DB=cached; }
+    if(!(DB && (DB.categories||[]).length)){ await loadBaseData(); }
+  }
   const saved = localStorage.getItem(LS_WORK);
   if(saved){
     try{
@@ -556,8 +617,10 @@ async function sbLoad(){
   const c=sbCfgAdmin();
   if(!c.url||!c.key) return null;
   try{
+    const ac=new AbortController(); const tid=setTimeout(()=>ac.abort(), 8000);
     const r=await fetch(c.url.replace(/\/+$/,'')+'/rest/v1/'+(c.table||'catalog')+'?select=data&id=eq.1',
-      {headers:{apikey:c.key,Authorization:'Bearer '+c.key}});
+      {headers:{apikey:c.key,Authorization:'Bearer '+c.key}, signal:ac.signal});
+    clearTimeout(tid);
     if(!r.ok) return null;
     const j=await r.json();
     return (j&&j[0]&&j[0].data)?j[0].data:null;
