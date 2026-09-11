@@ -177,6 +177,7 @@ button,input,textarea{font-family:inherit}
   <div class="topbar">
     <h1>⚙ 产品后台管理</h1>
     <span class="dirty" id="dirtyTip"></span>
+    <span class="dirty" id="sizeTip"></span>
     <span class="spacer"></span>
     <button id="reloadBtn">🔄 恢复云端版本</button>
     <button id="saveBtn">💾 保存并同步</button>
@@ -226,7 +227,20 @@ function toast(msg, kind){
   const t=$('#toast'); t.textContent=msg; t.className='toast show'+(kind?' '+kind:'');
   clearTimeout(toast._t); toast._t=setTimeout(()=>{t.className='toast';},2600);
 }
-function markDirty(){ dirty=true; $('#dirtyTip').textContent='● 修改中…'; scheduleSave(); }
+function markDirty(){ dirty=true; $('#dirtyTip').textContent='● 修改中…'; updateSizeTip(); scheduleSave(); }
+/* 数据体积提示：内嵌图片会让 catalog.json 膨胀 → 前台加载变慢甚至打不开。
+   超过 300KB 就标红，提示把图片换小或改用文件方式。 */
+function dataSizeKB(){
+  try{ return Math.round(JSON.stringify(DB).length/1024); }catch(e){ return 0; }
+}
+function updateSizeTip(){
+  const el=$('#sizeTip'); if(!el) return;
+  const kb=dataSizeKB();
+  el.textContent='· 数据 '+kb+' KB';
+  if(kb>600){ el.textContent='· 数据 '+kb+' KB（过大！会拖慢前台，请把图片压小）'; el.style.color='#ffb3b3'; }
+  else if(kb>300){ el.textContent='· 数据 '+kb+' KB（偏大，建议图片压小）'; el.style.color='#ffe0a8'; }
+  else { el.style.color='#bfe3c8'; }
+}
 let saveTimer, syncTimer;
 const LS_WORK_TS = 'fxy_admin_work_ts';
 function saveWorkDraft(){
@@ -396,6 +410,7 @@ async function initAdmin(){
   cur = DB.categories[0] ? DB.categories[0].id : '';
   renderSide(); renderContent();
   dirty=false; $('#dirtyTip').textContent='';
+  updateSizeTip();
 }
 
 /* ================= 渲染 ================= */
@@ -629,7 +644,7 @@ fileInput.addEventListener('change', async ()=>{
   }catch(err){ toast('上传失败：'+err.message,'err'); }
 });
 function pickImage(key){ pickKey=key; fileInput.click(); }
-function compress(file, maxSide=1400, quality=0.86){
+function compress(file, maxSide=760, quality=0.74){
   return new Promise((resolve,reject)=>{
     const fr=new FileReader();
     fr.onload=()=>{
