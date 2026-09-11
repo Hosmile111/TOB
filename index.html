@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<!-- WB_CACHE: v2026-09-11-2015 — 全面紧凑化：产品图贴合原比例（去掉4:3留白框）、投保链接行/空态瘦身、卡片不再等高拉伸 -->
+<!-- WB_CACHE: v2026-09-11-2105 — 内嵌图外置(catalog 2MB→30KB, 解决加载60s/打不开)、恢复真实查看密码、搜索框加大、更新时间去年份、加载与验证加硬超时 -->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
@@ -24,11 +24,11 @@ header.site{position:sticky;top:0;z-index:50;background:var(--bg);border-bottom:
 .title-bar{background:linear-gradient(180deg,#1d4d8a,#1a4680);color:#fff;text-align:center;padding:18px 20px 14px}
 .title-bar h1{margin:0 0 4px;font-size:24px;letter-spacing:2px;font-weight:800}
 .title-bar p{margin:0;font-size:13px;opacity:.92;letter-spacing:.5px}
-.toolbar{display:flex;align-items:center;gap:8px;max-width:1240px;margin:0 auto;padding:8px 16px;background:#fff;border-bottom:1px solid var(--line)}
+.toolbar{display:flex;align-items:center;gap:10px;max-width:1240px;margin:0 auto;padding:10px 16px;background:#fff;border-bottom:1px solid var(--line)}
 .toolbar .spacer{flex:1}
-.toolbar input{border:1px solid var(--line);border-radius:8px;padding:7px 11px;font-size:13px;outline:none;min-width:200px;flex:1;max-width:340px}
+.toolbar input{border:1px solid var(--line);border-radius:10px;padding:11px 15px;font-size:15px;outline:none;min-width:240px;flex:1;max-width:480px}
 .toolbar input:focus{border-color:#1d4d8a;box-shadow:0 0 0 3px rgba(29,78,216,.1)}
-.toolbar a{color:var(--muted);font-size:12.5px;text-decoration:none;border:1px solid var(--line);padding:6px 12px;border-radius:8px;white-space:nowrap}
+.toolbar a{color:var(--muted);font-size:13px;text-decoration:none;border:1px solid var(--line);padding:9px 13px;border-radius:9px;white-space:nowrap}
 .toolbar a:hover{border-color:#1d4d8a;color:#1d4d8a}
 .updated{font-size:11.5px;color:#93a1b3;white-space:nowrap}
 
@@ -38,7 +38,7 @@ header.site{position:sticky;top:0;z-index:50;background:var(--bg);border-bottom:
 @media(max-width:620px){.grid{grid-template-columns:repeat(2,1fr);gap:10px}
   .cat-hd{padding:10px 12px;font-size:16px;letter-spacing:1px}.cat-hd .emo{font-size:18px}
   .cat-sub{font-size:12px;padding:6px 8px}.cat-count,.cat-link{font-size:12px;padding:6px 8px}
-  .title-bar h1{font-size:20px}.toolbar{padding:7px 12px;gap:6px}.toolbar input{min-width:0}}
+  .title-bar h1{font-size:20px}.toolbar{padding:9px 12px;gap:8px;flex-wrap:wrap}.toolbar input{min-width:0;max-width:none;flex:1 1 100%;font-size:15px;padding:11px 14px}}
 
 .cat-card{background:var(--c-light);border:1.5px solid var(--c-dark);border-radius:4px;overflow:hidden;cursor:pointer;transition:transform .15s,box-shadow .15s}
 .cat-card:hover{transform:translateY(-3px);box-shadow:0 8px 22px rgba(0,0,0,.12)}
@@ -181,7 +181,8 @@ function fmtTime(iso){
   const d = new Date(iso);
   if(isNaN(d)) return '';
   const p = n => String(n).padStart(2,'0');
-  return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes());
+  // 只显示「月-日 时:分」（不显示年份，按用户要求）
+  return p(d.getMonth()+1)+'-'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes());
 }
 
 function applyDB(){
@@ -242,11 +243,23 @@ function sbCfg(){
 async function loadSb(){
   const c = sbCfg();
   if(!c.url || !c.key) return null;
-  const r = await fetch(c.url.replace(/\/+$/,'')+'/rest/v1/'+(c.table||'catalog')+'?select=data&id=eq.1',
-    { headers:{ apikey:c.key, Authorization:'Bearer '+c.key } });
-  if(!r.ok) throw new Error('Supabase HTTP '+r.status);
-  const j = await r.json();
-  return (j && j[0] && j[0].data && (j[0].data.categories||[]).length) ? j[0].data : null;
+  // 8 秒硬超时：Supabase 不可达/极慢时快速失败，不让页面与密码验证一直卡住
+  const ac = new AbortController();
+  const tm = setTimeout(()=>ac.abort(), 8000);
+  try{
+    const r = await fetch(c.url.replace(/\/+$/,'')+'/rest/v1/'+(c.table||'catalog')+'?select=data&id=eq.1',
+      { headers:{ apikey:c.key, Authorization:'Bearer '+c.key }, signal:ac.signal });
+    if(!r.ok) throw new Error('Supabase HTTP '+r.status);
+    const j = await r.json();
+    return (j && j[0] && j[0].data && (j[0].data.categories||[]).length) ? j[0].data : null;
+  }finally{ clearTimeout(tm); }
+}
+function fetchJsonTimeout(url, ms){
+  const ac = new AbortController();
+  const tm = setTimeout(()=>ac.abort(), ms);
+  return fetch(url, {cache:'no-store', signal:ac.signal})
+    .then(r=>r.ok?r.json():null)
+    .finally(()=>clearTimeout(tm));
 }
 /* 数据加载：localStorage 5 分钟缓存 + supabase/catalog 并发（谁先到用谁），8s 兜底超时 */
 const CAT_CACHE_KEY='fxy_cat_cache', CAT_CACHE_TTL=1*60*1000;
@@ -304,13 +317,17 @@ async function load(){
     applyDB(); syncFeeState(); render();
   };
   loadSb().then(tryUse).catch(()=>{});
-  fetch(API, {cache:'no-store'}).then(r=>r.ok?r.json():null).then(tryUse).catch(()=>{});
+  fetchJsonTimeout(API, 8000).then(tryUse).catch(()=>{});
 
-  // 3) 12s 兜底
-  await new Promise(r=>setTimeout(r, 12000));
+  // 3) 10s 兜底：两个数据源都不可达时给出可操作的「重新加载」
+  await new Promise(r=>setTimeout(r, 10000));
   if(!resolved){
     document.getElementById('app').innerHTML =
-      '<div class="err">数据加载超时：Supabase 和 catalog.json 都不可达<br><br>请检查网络后刷新。</div>';
+      '<div class="err">数据加载超时：云端数据源与本地 catalog.json 都不可达<br><br>'+
+      '请检查网络后点下面的按钮重试。'+
+      '<div style="margin-top:12px"><button id="retryLoad" style="padding:9px 22px;border:1px solid #b82020;background:#fff;color:#b82020;border-radius:8px;font-size:13.5px;cursor:pointer">重新加载</button></div></div>';
+    const rb=document.getElementById('retryLoad');
+    if(rb) rb.onclick=()=>{ try{ localStorage.removeItem(CAT_CACHE_KEY); }catch(e){} location.reload(); };
   }
 }
 
@@ -491,15 +508,20 @@ document.getElementById('feeMask').addEventListener('click',e=>{ if(e.target.id=
 async function doFeeOk(){
   const v=(document.getElementById('feeInput').value||'').trim();
   const msg=document.getElementById('feeMsg');
+  const okBtn=document.getElementById('feeOk');
   if(!v){ msg.textContent='请输入密码'; return; }
   let aud = validCode(v);
+  let netFail=false;
   if(!aud){
-    // 本地缓存可能过期（后台刚生成了新密码）：强制拉线上最新数据重试一次
+    // 本地缓存可能过期（后台刚生成了新密码）：拉一次线上最新数据重试（有 8 秒硬超时，不会一直卡）
     msg.textContent='正在验证…';
+    if(okBtn){ okBtn.disabled=true; okBtn.style.opacity='.6'; }
     try{
       const fresh = await loadSb();
       if(fresh){ DB = fresh; writeCatCache(fresh); applyDB(); aud = validCode(v); }
-    }catch(e){}
+      else netFail = true;
+    }catch(e){ netFail = true; }
+    if(okBtn){ okBtn.disabled=false; okBtn.style.opacity=''; }
   }
   if(aud){
     localStorage.setItem('fxy_fee_code', v);
@@ -511,7 +533,7 @@ async function doFeeOk(){
     document.getElementById('feeMask').style.display='none';
     render();
   }else{
-    msg.textContent='密码无效或已失效，请联系管理员';
+    msg.textContent = netFail ? '网络较慢，没能连上云端校验，请稍后重试' : '密码无效或已失效，请联系管理员';
     document.getElementById('feeInput').value='';
     document.getElementById('feeInput').focus();
   }
