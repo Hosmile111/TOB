@@ -179,7 +179,11 @@ function applyDB(){
 let FEE_ON = false;
 let FEE_AUDIENCE = 'none'; // 'agent'|'client'|'channel'|'both'|'none'
 function passcodes(){ return (DB.viewPasscodes||[]).filter(x=>x && x.enabled && x.code); }
-function maskRate(s){ return String(s==null?'':s).replace(/\d+(?:\.\d+)?\s*%/g, '**%'); }
+function maskRate(s){
+  // 只遮罩「前面是行首/空白」的 数字%，避免误伤产品名里的「团意险基础款 28%」「平安团意优选 22」等
+  // 例：「保费 23%」→「保费 **%」（前面是空白）；「团意险基础款 28%」→ 不动（28% 前面是中文）
+  return String(s==null?'':s).replace(/(^|\s)\d+(?:\.\d+)?\s*%/g, '$1**%');
+}
 function F(s){ return FEE_ON ? s : maskRate(s); }
 // 校验密码并返回该组的 audience（'agent'/'client'/'both'），无效则 null
 function validCode(code){
@@ -347,8 +351,7 @@ function renderHome(){
     h += '</article>';
   });
   h += '</div>';
-  h += '<div class="tip"><b>说明：</b>保费与保障内容仅供参考，实际以保险公司核保报价为准。'+
-       '手续费（业务员 / 客户）需管理员授权后查看对应的那一条。</div>';
+  h += '<div class="tip"><b>说明：</b>保费与保障内容仅供参考，实际以保险公司核保报价为准。</div>';
   return h;
 }
 
@@ -387,9 +390,10 @@ function renderProd(p, c){
   }
   h += '<div class="prod-body">';
   const title = p.name || p.company || '';
-  if(title) h += '<h4>'+esc(F(title))+'</h4>';
+  // 产品名是基础信息，不走遮罩（避免「团意险基础款 28%」里的 28% 被误伤为 **%）
+  if(title) h += '<h4>'+esc(title)+'</h4>';
   const ins = p.insurer || p.company || '';
-  if(ins && ins !== title) h += '<span class="insurer">'+esc(F(ins))+'</span>';
+  if(ins && ins !== title) h += '<span class="insurer">'+esc(ins)+'</span>';
   if(p.premium) h += '<div class="fee">💰 参考保费：'+esc(F(p.premium))+'</div>';
   // 三类手续费（渠道 / 业务员 / 客户），按密码 audience 仅展示对应的那一条；其他行 display:none 隐藏；不显示字眼
   if((p.feeAgent || p.feeClient || p.feeChannel) && FEE_ON){
