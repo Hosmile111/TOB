@@ -90,6 +90,10 @@ header.site{position:sticky;top:0;z-index:50;background:var(--bg);border-bottom:
 .tip{margin-top:28px;background:#fff;border:1px dashed #d7e0ec;border-radius:10px;padding:13px 16px;font-size:12.5px;color:var(--muted);line-height:1.8}
 .tip b{color:var(--txt)}
 
+/* 刷新按钮 */
+.refresh-btn{border:1px solid var(--line);background:#fff;border-radius:50%;width:30px;height:30px;cursor:pointer;font-size:14px;color:var(--muted);display:inline-flex;align-items:center;justify-content:center;transition:transform .4s,color .2s,border-color .2s}
+.refresh-btn:hover{border-color:#1d4d8a;color:#1d4d8a}
+.refresh-btn.spin{transform:rotate(360deg)}
 /* 手续费开关 */
 .fee-sw{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);background:#fff;border-radius:20px;padding:4px 11px 4px 6px;cursor:pointer;font-size:12.5px;color:var(--muted);white-space:nowrap;transition:border-color .2s,color .2s}
 .fee-sw:hover{border-color:#1d4d8a;color:#1d4d8a}
@@ -131,6 +135,7 @@ header.site{position:sticky;top:0;z-index:50;background:var(--bg);border-bottom:
     <input id="q" type="search" placeholder="搜索产品名称 / 保险公司 / 保障亮点…">
     <span class="spacer"></span>
     <span class="updated" id="updated"></span>
+    <button type="button" id="refreshBtn" class="refresh-btn" title="强制从云端刷新数据">🔄</button>
     <button type="button" id="feeSw" class="fee-sw" aria-pressed="false" title="输入密码后显示费率"><span class="knob"></span></button>
   </div>
 </header>
@@ -493,6 +498,29 @@ document.getElementById('feeInput').addEventListener('keydown',e=>{ if(e.key==='
 
 view = parseHash();
 load();
+document.getElementById('refreshBtn').onclick = async () => {
+  const btn = document.getElementById('refreshBtn');
+  btn.classList.add('spin'); btn.disabled = true;
+  try {
+    const next = await loadSb();
+    if (next) {
+      writeCatCache(next);
+      const before = JSON.stringify(DB);
+      DB = next; applyDB(); syncFeeState(); render();
+      if (before !== JSON.stringify(next)) {
+        showUpdateToast('已刷新到最新 · v' + (next.updatedAt||'').slice(0,16).replace('T',' '));
+      } else {
+        showUpdateToast('已是最新 · v' + (next.updatedAt||'').slice(0,16).replace('T',' '));
+      }
+    } else {
+      showUpdateToast('未拉到云端数据');
+    }
+  } catch(e) {
+    showUpdateToast('刷新失败：'+e.message);
+  } finally {
+    setTimeout(()=>{ btn.classList.remove('spin'); btn.disabled = false; }, 600);
+  }
+};
 </script>
 </body>
 </html>
