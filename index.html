@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<!-- WB_CACHE: v2026-09-11-2105 — 内嵌图外置(catalog 2MB→30KB, 解决加载60s/打不开)、恢复真实查看密码、搜索框加大、更新时间去年份、加载与验证加硬超时 -->
+<!-- WB_CACHE: v2026-09-11-2315 — 仅搜索行吸顶(大标题随页面滚动)、更新日期+刷新+费率同一排、费率解锁后排在产品名后同排 -->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
@@ -20,17 +20,19 @@ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft
 font-size:14px;line-height:1.6;-webkit-font-smoothing:antialiased}
 button,input{font-family:inherit}
 
-header.site{position:sticky;top:0;z-index:50;background:var(--bg);border-bottom:1px solid var(--line)}
+header.site{background:var(--bg)}
 .title-bar{background:linear-gradient(180deg,#1d4d8a,#1a4680);color:#fff;text-align:center;padding:18px 20px 14px}
 .title-bar h1{margin:0 0 4px;font-size:24px;letter-spacing:2px;font-weight:800}
 .title-bar p{margin:0;font-size:13px;opacity:.92;letter-spacing:.5px}
-.toolbar{display:flex;align-items:center;gap:10px;max-width:1240px;margin:0 auto;padding:10px 16px;background:#fff;border-bottom:1px solid var(--line)}
+/* 只有这一行吸顶：搜索 + 更新日期 + 刷新 + 费率开关 同一排 */
+.toolbar{position:sticky;top:0;z-index:50;background:#fff;border-bottom:1px solid var(--line)}
+.toolbar-inner{display:flex;align-items:center;gap:10px;max-width:1240px;margin:0 auto;padding:9px 16px}
 .toolbar .spacer{flex:1}
 .toolbar input{border:1px solid var(--line);border-radius:10px;padding:11px 15px;font-size:15px;outline:none;min-width:240px;flex:1;max-width:480px}
 .toolbar input:focus{border-color:#1d4d8a;box-shadow:0 0 0 3px rgba(29,78,216,.1)}
 .toolbar a{color:var(--muted);font-size:13px;text-decoration:none;border:1px solid var(--line);padding:9px 13px;border-radius:9px;white-space:nowrap}
 .toolbar a:hover{border-color:#1d4d8a;color:#1d4d8a}
-.updated{font-size:11.5px;color:#93a1b3;white-space:nowrap}
+.updated{font-size:11.5px;color:#93a1b3;white-space:nowrap;margin-left:auto}
 
 .wrap{max-width:1240px;margin:0 auto;padding:22px 16px 60px}
 .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
@@ -38,7 +40,7 @@ header.site{position:sticky;top:0;z-index:50;background:var(--bg);border-bottom:
 @media(max-width:620px){.grid{grid-template-columns:repeat(2,1fr);gap:10px}
   .cat-hd{padding:10px 12px;font-size:16px;letter-spacing:1px}.cat-hd .emo{font-size:18px}
   .cat-sub{font-size:12px;padding:6px 8px}.cat-count,.cat-link{font-size:12px;padding:6px 8px}
-  .title-bar h1{font-size:20px}.toolbar{padding:9px 12px;gap:8px;flex-wrap:wrap}.toolbar input{min-width:0;max-width:none;flex:1 1 100%;font-size:15px;padding:11px 14px}}
+  .title-bar h1{font-size:20px}.toolbar-inner{padding:8px 12px;gap:8px;flex-wrap:wrap}.toolbar input{min-width:0;max-width:none;flex:1 1 100%;font-size:15px;padding:10px 14px}.updated{margin-left:0;font-size:11.5px}}
 
 .cat-card{background:var(--c-light);border:1.5px solid var(--c-dark);border-radius:4px;overflow:hidden;cursor:pointer;transition:transform .15s,box-shadow .15s}
 .cat-card:hover{transform:translateY(-3px);box-shadow:0 8px 22px rgba(0,0,0,.12)}
@@ -87,6 +89,10 @@ header.site{position:sticky;top:0;z-index:50;background:var(--bg);border-bottom:
 .prod-body h4{margin:0 0 8px;font-size:16px;font-weight:700;line-height:1.4}
 .prod-body h4:empty{display:none}
 .insurer{display:inline-block;background:var(--c-light,#eef2f8);color:var(--c-sub,#456);font-size:12px;font-weight:600;padding:2px 9px;border-radius:20px;margin-bottom:9px}
+/* 产品名/公司 + 费率 同一排（费率解锁后才出现） */
+.name-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:9px}
+.name-row .insurer{margin-bottom:0}
+.fee-inline{display:inline-flex;align-items:center;background:#e8f1ff;border:1px solid #cfe0f7;color:#1d4d8a;font-size:13px;font-weight:700;padding:2px 10px;border-radius:20px;white-space:nowrap;font-variant-numeric:tabular-nums}
 .field{margin-bottom:7px;font-size:13px;line-height:1.65;display:flex;gap:7px}
 .field .k{color:#8b98ab;flex-shrink:0;min-width:56px}
 .field .v{color:#2b3745;flex:1;white-space:pre-wrap}
@@ -126,7 +132,8 @@ header.site{position:sticky;top:0;z-index:50;background:var(--bg);border-bottom:
 .fbox .acts button{flex:1;border:1px solid var(--line);background:#fff;padding:10px;border-radius:8px;font-size:13px;cursor:pointer}
 .fbox .acts button.pri{background:#1d4d8a;color:#fff;border-color:#1d4d8a;font-weight:700}
 .fbox .msg{margin-top:10px;font-size:12.5px;min-height:18px;color:#b82020}
-/* 手续费区域：按密码 audience 仅展示对应一条；不显示业务员/客户/渠道字眼，仅显示数字 */
+/* 以下 .fee2 / .fee-row 为「费率单独成块」的旧样式，现已改为 .name-row + .fee-inline（费率排在产品名后面同一排）；
+   保留以备回退，当前渲染不再使用 */
 .fee2{display:flex;gap:0 12px;margin-bottom:9px;padding:9px 12px;background:#f6f9ff;border:1px solid #dde7fb;border-radius:7px;font-size:13.5px;flex-wrap:wrap;align-items:center}
 .fee2 .fee-row{display:inline-flex;align-items:center;font-weight:600;color:#1a3a5a;font-variant-numeric:tabular-nums;font-size:14px}
 .fee2 .fee-row:not(.is-hidden):not(:last-child)::after{content:'·';color:#9bb0c8;margin-left:12px;font-weight:400;font-size:13px}
@@ -142,14 +149,17 @@ header.site{position:sticky;top:0;z-index:50;background:var(--bg);border-bottom:
     <h1>非车险产品浏览目录</h1>
     <p id="subtitle">点击卡片查看详情</p>
   </div>
-  <div class="toolbar">
+</header>
+
+<!-- 只有搜索这一行吸顶；大标题随页面滚走，节省屏幕空间 -->
+<div class="toolbar">
+  <div class="toolbar-inner">
     <input id="q" type="search" placeholder="搜索产品名称 / 保险公司 / 保障亮点…">
-    <span class="spacer"></span>
     <span class="updated" id="updated"></span>
     <button type="button" id="refreshBtn" class="refresh-btn" title="强制从云端刷新数据">🔄</button>
     <button type="button" id="feeSw" class="fee-sw" aria-pressed="false" title="输入密码后显示费率"><span class="knob"></span></button>
   </div>
-</header>
+</div>
 
 <div id="feeMask" class="fmask" style="display:none">
   <div class="fbox">
@@ -447,17 +457,21 @@ function renderProd(p, c){
   // 产品名只显示一行（蓝色 chip）；自动截掉末尾的「数字%」形式（已有独立的 feeChannel/feeAgent/feeClient 字段，不需要在名称里重复显示费率）
   const rawIns = p.insurer || p.company || p.name || '';
   const ins = String(rawIns).replace(/\s*\d+(?:\.\d+)?\s*%$/, '').trim();
-  if(ins) h += '<span class="insurer">'+esc(ins)+'</span>';
-  if(p.premium) h += '<div class="fee">💰 参考保费：'+esc(F(p.premium))+'</div>';
-  // 三类手续费（渠道 / 业务员 / 客户），按密码 audience 仅展示对应的那一条；其他行 display:none 隐藏；不显示字眼
-  if((p.feeAgent || p.feeClient || p.feeChannel) && FEE_ON){
+  // 费率（解锁后）直接排在产品名/公司同一排的后面；不显示「渠道/业务员/客户」字眼
+  const feeVals = [];
+  if(FEE_ON){
     const rowVis = f => FEE_AUDIENCE==='both' || FEE_AUDIENCE===f;
-    h += '<div class="fee2">'+
-         '<div class="fee-row agent'+(rowVis('agent')?'':' is-hidden')+'"><span class="fval">'+esc(F2('agent',p.feeAgent))+'</span></div>'+
-         '<div class="fee-row client'+(rowVis('client')?'':' is-hidden')+'"><span class="fval">'+esc(F2('client',p.feeClient))+'</span></div>'+
-         '<div class="fee-row channel'+(rowVis('channel')?'':' is-hidden')+'"><span class="fval">'+esc(F2('channel',p.feeChannel))+'</span></div>'+
-         '</div>';
+    if(rowVis('channel') && p.feeChannel) feeVals.push(p.feeChannel);
+    if(rowVis('agent')   && p.feeAgent)   feeVals.push(p.feeAgent);
+    if(rowVis('client')  && p.feeClient)  feeVals.push(p.feeClient);
   }
+  if(ins || feeVals.length){
+    h += '<div class="name-row">';
+    if(ins) h += '<span class="insurer">'+esc(ins)+'</span>';
+    if(feeVals.length) h += '<span class="fee-inline">'+esc(F(feeVals.join(' · ')))+'</span>';
+    h += '</div>';
+  }
+  if(p.premium) h += '<div class="fee">💰 参考保费：'+esc(F(p.premium))+'</div>';
   if(p.highlight) h += '<div class="hl">'+esc(F(p.highlight))+'</div>';
   if(p.feature) h += field('产品特色', p.feature);
   if(p.scene) h += field('适用场景', p.scene);
