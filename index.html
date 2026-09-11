@@ -402,9 +402,10 @@ function renderProd(p, c){
          '<img src="'+esc(p.image)+'" alt="'+esc(F(p.name||'产品图'))+'" loading="lazy" decoding="async"></div>';
   }
   h += '<div class="prod-body">';
-  // 产品名只显示一行（蓝色 chip），未授权时名称里的数字% 也走 maskRate 遮罩成 **%
-  const ins = p.insurer || p.company || p.name || '';
-  if(ins) h += '<span class="insurer">'+esc(F(ins))+'</span>';
+  // 产品名只显示一行（蓝色 chip）；自动截掉末尾的「数字%」形式（已有独立的 feeChannel/feeAgent/feeClient 字段，不需要在名称里重复显示费率）
+  const rawIns = p.insurer || p.company || p.name || '';
+  const ins = String(rawIns).replace(/\s*\d+(?:\.\d+)?\s*%$/, '').trim();
+  if(ins) h += '<span class="insurer">'+esc(ins)+'</span>';
   if(p.premium) h += '<div class="fee">💰 参考保费：'+esc(F(p.premium))+'</div>';
   // 三类手续费（渠道 / 业务员 / 客户），按密码 audience 仅展示对应的那一条；其他行 display:none 隐藏；不显示字眼
   if((p.feeAgent || p.feeClient || p.feeChannel) && FEE_ON){
