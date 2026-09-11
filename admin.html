@@ -116,6 +116,22 @@ button,input,textarea{font-family:inherit}
 .prow button.off{border-color:#b82020;color:#b82020;font-weight:600}
 .prow button.del:hover{border-color:#b82020;color:#b82020}
 
+/* 投保链接编辑块 */
+.insure-block{grid-column:1/-1;border:1px dashed #cfd9e6;background:#f7faff;border-radius:8px;padding:10px 12px;display:grid;grid-template-columns:1fr 120px;gap:10px;align-items:start}
+.insure-block .insure-text{display:flex;flex-direction:column;gap:6px}
+.insure-block .insure-text label{margin:0!important;font-size:12px;color:#5b6a82;font-weight:500}
+.insure-block .insure-text input{width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:6px;font-size:12.5px;outline:none}
+.insure-block .insure-text input:focus{border-color:var(--brand);box-shadow:0 0 0 3px rgba(29,78,216,.1)}
+.insure-block .qr-cell{display:flex;flex-direction:column;align-items:center;gap:6px}
+.insure-block .qr-cell .prev-qr{width:100px;height:100px;border:1px solid var(--line);border-radius:6px;background:#fff;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.insure-block .qr-cell .prev-qr img{width:100%;height:100%;object-fit:contain}
+.insure-block .qr-cell .prev-qr .placeholder{font-size:11px;color:#9aa7b8;text-align:center;padding:6px;line-height:1.4}
+.insure-block .qr-cell .ops{display:flex;gap:4px;flex-wrap:wrap;justify-content:center}
+.insure-block .qr-cell .ops button{border:1px solid var(--line);background:#fff;border-radius:6px;padding:5px 9px;font-size:11.5px;cursor:pointer;color:#5b6a82}
+.insure-block .qr-cell .ops button:hover{border-color:var(--brand);color:var(--brand)}
+.insure-block .qr-cell .ops button.rm:hover{border-color:#b82020;color:#b82020}
+@media(max-width:760px){.insure-block{grid-template-columns:1fr}}
+
 /* 手机端后台优化 */
 @media(max-width:760px){
   .main{flex-direction:column}
@@ -441,6 +457,19 @@ function renderPCard(c,p,i,isCard){
     h+=ta('保障亮点 / 主要责任','highlight',p.highlight,key,'full');
     h+=ta('备注','note',p.note,key,'full');
   }
+  // 投保链接（URL + 二维码）
+  h += '<div class="insure-block">';
+  h += '<div class="insure-text"><label>投保链接（URL）</label>'+
+       '<input type="url" data-f="insureLink" data-key="'+esc(key)+'" placeholder="https://投保页/产品H5…（可空）" value="'+esc(p.insureLink||'')+'"></div>';
+  h += '<div class="qr-cell">';
+  h += '<div class="prev-qr" data-qr="'+esc(key)+'">';
+  if(p.insureQR) h += '<img src="'+esc(p.insureQR)+'" alt="">';
+  else h += '<div class="placeholder">📱<br>点击下方按钮上传<br>投保二维码</div>';
+  h += '</div><div class="ops">';
+  h += '<button data-qrupload="'+esc(key)+'">上传/替换</button>';
+  if(p.insureQR) h += '<button class="rm" data-rmqr="'+esc(key)+'">移除</button>';
+  h += '</div></div>';
+  h += '</div>';
   h+='</div></div></div>';
   return h;
 }
@@ -469,6 +498,17 @@ document.addEventListener('click', async e=>{
 
   const up = e.target.closest('[data-upload]');
   if(up){ pickImage(up.dataset.upload); return; }
+
+  const qu = e.target.closest('[data-qrupload]');
+  if(qu){ pickQR(qu.dataset.qrupload); return; }
+
+  const rmqr = e.target.closest('[data-rmqr]');
+  if(rmqr){
+    const [cid,i]=rmqr.dataset.rmqr.split('|');
+    const c=DB.categories.find(x=>x.id===cid);
+    if(c && c.products[+i]){ c.products[+i].insureQR=''; markDirty(); renderSide(); renderContent(); }
+    return;
+  }
 
   const rm = e.target.closest('[data-rmimg]');
   if(rm){
@@ -500,7 +540,8 @@ document.addEventListener('click', async e=>{
     const c=DB.categories.find(x=>x.id===cur);
     c.products.push({id:'p'+Date.now().toString(36),name:'',insurer:'',highlight:'',
       premium:'',scene:'',note:'',company:'',area:'',notice:'',feature:'',image:'',
-      feeAgent:'',feeClient:'',feeChannel:''});
+      feeAgent:'',feeClient:'',feeChannel:'',
+      insureLink:'',insureQR:''});
     markDirty(); renderSide(); renderContent();
     window.scrollTo(0,document.body.scrollHeight);
     return;
@@ -606,6 +647,50 @@ function compress(file, maxSide=1400, quality=0.86){
         resolve(cv.toDataURL('image/jpeg',quality));
       };
       img.onerror=()=>reject(new Error('图片读取失败'));
+      img.src=fr.result;
+    };
+    fr.onerror=()=>reject(new Error('文件读取失败'));
+    fr.readAsDataURL(file);
+  });
+}
+
+/* ================= 二维码上传（压缩为 320px base64 内联） ================= */
+let pickQRKey=null;
+const qrInput=document.createElement('input');
+qrInput.type='file'; qrInput.accept='image/*'; qrInput.style.display='none';
+document.body.appendChild(qrInput);
+qrInput.addEventListener('change', async ()=>{
+  const f=qrInput.files && qrInput.files[0];
+  qrInput.value='';
+  if(!f||!pickQRKey) return;
+  try{
+    toast('正在处理二维码…');
+    const b64 = await compressQR(f);
+    const [cid,i]=pickQRKey.split('|');
+    const c=DB.categories.find(x=>x.id===cid);
+    if(c && c.products[+i]){ c.products[+i].insureQR=b64; markDirty(); renderSide(); renderContent(); }
+    toast('二维码已替换（本机保存）','ok');
+  }catch(err){ toast('上传失败：'+err.message,'err'); }
+});
+function pickQR(key){ pickQRKey=key; qrInput.click(); }
+function compressQR(file, maxSide=320, quality=0.95){
+  return new Promise((resolve,reject)=>{
+    const fr=new FileReader();
+    fr.onload=()=>{
+      const img=new Image();
+      img.onload=()=>{
+        let w=img.width,h=img.height;
+        if(Math.max(w,h)>maxSide){
+          if(w>=h){ h=Math.round(h*maxSide/w); w=maxSide; }
+          else { w=Math.round(w*maxSide/h); h=maxSide; }
+        }
+        const cv=document.createElement('canvas'); cv.width=w; cv.height=h;
+        const ctx=cv.getContext('2d');
+        ctx.fillStyle='#fff'; ctx.fillRect(0,0,w,h);
+        ctx.drawImage(img,0,0,w,h);
+        resolve(cv.toDataURL('image/png',quality));
+      };
+      img.onerror=()=>reject(new Error('二维码读取失败'));
       img.src=fr.result;
     };
     fr.onerror=()=>reject(new Error('文件读取失败'));
