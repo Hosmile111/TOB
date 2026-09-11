@@ -1,19 +1,13 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<!-- WB_CACHE: v2026-09-11-1315 — 恢复 c01-p01 费率(28/23/20)；新增投保链接行（QR + URL + 联系管理员降级） -->
+<!-- WB_CACHE: v2026-09-11-2015 — 全面紧凑化：产品图贴合原比例（去掉4:3留白框）、投保链接行/空态瘦身、卡片不再等高拉伸 -->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>非车险产品浏览目录</title>
-<link rel="preconnect" href="https://hrwezjngocxtlfsprmwk.supabase.co" crossorigin>
-<link rel="dns-prefetch" href="https://hosmile111.github.io">
-<link rel="preconnect" href="https://hrwezjngocxtlfsprmwk.supabase.co" crossorigin>
-<link rel="dns-prefetch" href="https://hosmile111.github.io">
-<link rel="preconnect" href="https://hrwezjngocxtlfsprmwk.supabase.co" crossorigin>
-<link rel="dns-prefetch" href="https://hosmile111.github.io">
 <link rel="preconnect" href="https://hrwezjngocxtlfsprmwk.supabase.co" crossorigin>
 <link rel="dns-prefetch" href="https://hosmile111.github.io">
 <style>
@@ -63,30 +57,33 @@ header.site{position:sticky;top:0;z-index:50;background:var(--bg);border-bottom:
 .detail-hd h2{margin:0 0 3px;font-size:21px;font-weight:800;letter-spacing:1px}
 .detail-hd p{margin:0;font-size:13px;opacity:.9}
 
-.prod-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:18px}
+.prod-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;align-items:start}
 @media(max-width:900px){.prod-grid{grid-template-columns:1fr}}
 .prod-card{background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden;box-shadow:var(--shadow);display:flex;flex-direction:column}
 .prod-card:hover{box-shadow:0 6px 18px rgba(0,0,0,.10);border-color:#c8d6ea}
-.prod-img{position:relative;aspect-ratio:4/3;background:linear-gradient(135deg,#f3f6fa,#e9eef5);display:flex;align-items:center;justify-content:center;overflow:hidden}
-.prod-img img{width:100%;height:100%;object-fit:contain;display:block;opacity:0;transition:opacity .25s}
+/* 产品图：图框贴合图片自身比例（不再用固定宽度/4:3，彻底消除左右留白） */
+.prod-img{position:relative;width:fit-content;max-width:100%;min-width:160px;min-height:120px;margin:10px auto 0;padding:6px;background:#f6f8fb;border:1px solid #e6ecf3;border-radius:10px;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.prod-img img{max-width:100%;max-height:380px;width:auto;height:auto;object-fit:contain;display:block;opacity:0;transition:opacity .25s;border-radius:6px}
 .prod-img:not(.loading) img{opacity:1}
 .prod-img .ph{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;font-size:12px;color:#9aa7b8}
 .prod-img .ph i{width:22px;height:22px;border:2px solid #d8e0ea;border-top-color:#1d4d8a;border-radius:50%;animation:fspin .8s linear infinite}
 .prod-img:not(.loading) .ph{display:none}
 .prod-img.err .ph i{display:none}
 .prod-img.err .ph{color:#b82020}
+@media(max-width:620px){.prod-img img{max-height:260px}}
 
-/* 投保链接行（图片正下方，详情正文之上）*/
-.insure-row{margin:10px 14px 0;padding:9px 12px;background:#f6f9ff;border:1px solid #dfe8f4;border-radius:8px;display:flex;align-items:center;gap:10px;justify-content:center;flex-wrap:wrap;line-height:1.5}
-.insure-row.empty{background:#fafbfd;color:#7f8a9b;font-size:12.5px;border-style:dashed;justify-content:center}
-.insure-row .qr-img{width:64px;height:64px;border:1px solid #cfd9e6;border-radius:5px;object-fit:contain;background:#fff;padding:2px}
+/* 投保链接行：有链接/二维码才成块；无链接时仅一行细提示，不再占一条空框 */
+.insure-row{margin:8px 12px 0;padding:7px 10px;background:#f6f9ff;border:1px solid #dfe8f4;border-radius:8px;display:flex;align-items:center;gap:8px;justify-content:center;flex-wrap:wrap;line-height:1.35}
+.insure-row.empty{margin:6px 12px 0;padding:0;background:transparent;border:0;color:#9aa6b6;font-size:11.5px;line-height:1.5;justify-content:flex-start}
+.insure-row.empty b{color:#5b7ba6;font-weight:600}
+.insure-row .qr-img{width:52px;height:52px;border:1px solid #cfd9e6;border-radius:5px;object-fit:contain;background:#fff;padding:2px}
 .insure-row .qr-text{display:flex;flex-direction:column;gap:2px;min-width:0}
-.insure-row .qr-text .lab{font-size:11px;color:#8a98ad;letter-spacing:.5px}
-.insure-row .qr-text .hint{font-size:12.5px;color:#45546b}
-.insure-row .insure-btn{display:inline-block;padding:7px 14px;background:var(--c-dark,#1d4d8a);color:#fff;font-size:13px;font-weight:600;border-radius:6px;text-decoration:none;white-space:nowrap}
+.insure-row .qr-text .lab{font-size:10.5px;color:#8a98ad;letter-spacing:.5px}
+.insure-row .qr-text .hint{font-size:12px;color:#45546b}
+.insure-row .insure-btn{display:inline-block;padding:6px 13px;background:var(--c-dark,#1d4d8a);color:#fff;font-size:12.5px;font-weight:600;border-radius:6px;text-decoration:none;white-space:nowrap}
 .insure-row .insure-btn:hover{opacity:.92;transform:translateY(-1px);transition:all .15s}
 @keyframes fspin{to{transform:rotate(360deg)}}
-.prod-body{padding:14px 16px 16px;flex:1}
+.prod-body{padding:12px 14px 14px;flex:1}
 .prod-body h4{margin:0 0 8px;font-size:16px;font-weight:700;line-height:1.4}
 .prod-body h4:empty{display:none}
 .insurer{display:inline-block;background:var(--c-light,#eef2f8);color:var(--c-sub,#456);font-size:12px;font-weight:600;padding:2px 9px;border-radius:20px;margin-bottom:9px}
@@ -427,7 +424,7 @@ function renderProd(p, c){
     else if(hasQR) h += '<span class="hint">或保存图片→微信扫码</span>';
     h += '</div></div>';
   }else{
-    h += '<div class="insure-row empty">如需投保，请<b>联系管理员</b>获取投保链接</div>';
+    h += '<div class="insure-row empty">投保请联系<b>管理员</b>获取链接</div>';
   }
   h += '<div class="prod-body">';
   // 产品名只显示一行（蓝色 chip）；自动截掉末尾的「数字%」形式（已有独立的 feeChannel/feeAgent/feeClient 字段，不需要在名称里重复显示费率）
