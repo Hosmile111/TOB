@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<!-- WB_CACHE: v2026-09-12-1110 — 首页极速化：内联 Supabase 配置+数据快照(1个请求0等待)、后台静默升级到云端最新 -->
+<!-- WB_CACHE: v2026-09-12-1245 — 费率解锁长期记住本机(localStorage+Cookie双写)、支持免密链接?fee=密码、数据未就绪不再误清密码 -->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
@@ -192,6 +192,7 @@ header.site{background:var(--bg)}
 <div class="wrap" id="app"><div class="loading">正在加载产品数据…</div></div>
 
 
+
 <!--INLINE_START 内联配置与数据快照（由 build/inline_snapshot.py 生成，勿手改）-->
 <script>window.SUPABASE={
   url: 'https://hrwezjngocxtlfsprmwk.supabase.co',
@@ -229,6 +230,40 @@ function applyDB(){
 /* ===== 手续费开关：双手续费（业务员 / 客户），按密码组 audience 控制可见性 ===== */
 let FEE_ON = false;
 let FEE_AUDIENCE = 'none'; // 'agent'|'client'|'channel'|'both'|'none'
+/* ===== 查看密码的「记住本机」存取 =====
+   同时写 localStorage + Cookie 两份：某些浏览器/容器会清 localStorage
+   （微信内置浏览器、隐私模式、退出清站点数据…），Cookie 往往能留下。 */
+function feeStore(k, v){
+  const LK = k==='code' ? 'fxy_fee_code' : 'fxy_fee_on';
+  const CK = k==='code' ? 'fxy_code' : 'fxy_on';
+  try{ if(v===null) localStorage.removeItem(LK); else localStorage.setItem(LK, v); }catch(e){}
+  try{
+    if(v===null) document.cookie = CK + '=;max-age=0;path=/';
+    else document.cookie = CK + '=' + encodeURIComponent(v) + ';max-age=31536000;path=/';
+  }catch(e){}
+}
+function feeLoad(k){
+  const LK = k==='code' ? 'fxy_fee_code' : 'fxy_fee_on';
+  const CK = k==='code' ? 'fxy_code' : 'fxy_on';
+  try{ const v = localStorage.getItem(LK); if(v!=null) return v; }catch(e){}
+  try{
+    const m = document.cookie.match(new RegExp('(?:^|; )' + CK + '=([^;]*)'));
+    if(m) return decodeURIComponent(m[1]);
+  }catch(e){}
+  try{ const v = sessionStorage.getItem(LK); if(v!=null) return v; }catch(e){}
+  return null;
+}
+/* 免密链接：…/TOB/?fee=密码  → 打开即自动解锁（密码只留在本机，地址栏会立刻抹掉） */
+function autoFeeFromUrl(){
+  try{
+    const m = (location.search||'').match(/[?&]fee=([A-Za-z0-9]{3,12})/);
+    if(!m) return false;
+    feeStore('code', m[1]); feeStore('on', '1');
+    try{ history.replaceState(null, '', location.pathname + (location.hash||'')); }catch(e){}
+    return true;
+  }catch(e){ return false; }
+}
+const __URL_FEE__ = autoFeeFromUrl();
 function passcodes(){ return (DB.viewPasscodes||[]).filter(x=>x && x.enabled && x.code); }
 function maskRate(s){
   // 遮罩任意位置的「数字%」模式 —— 未授权访客应看不到任何费率数字
@@ -249,16 +284,16 @@ function F2(field, s){
   return '';
 }
 function syncFeeState(){
-  const code = localStorage.getItem('fxy_fee_code')||'';
-  const onFlag = localStorage.getItem('fxy_fee_on')==='1';
-  const aud = code ? validCode(code) : null;
-  if(!aud){
-    if(code){ localStorage.removeItem('fxy_fee_code'); localStorage.setItem('fxy_fee_on','0'); }
-    FEE_ON = false; FEE_AUDIENCE = 'none';
-  }else{
-    FEE_ON = onFlag;
-    FEE_AUDIENCE = aud;
-  }
+  const code = feeLoad('code')||'';
+  const onFlag = feeLoad('on')==='1';
+  if(!code){ FEE_ON = false; FEE_AUDIENCE = 'none'; updateFeeSw(); return; }
+  const aud = validCode(code);
+  if(aud){ FEE_ON = onFlag; FEE_AUDIENCE = aud; updateFeeSw(); return; }
+  // 密码表还没拿到（数据未就绪）→ 先保留，绝不清掉，等数据到了会自动解锁
+  if(passcodes().length === 0){ FEE_ON = false; FEE_AUDIENCE = 'none'; updateFeeSw(); return; }
+  // 密码表非空且确实没有这个码 → 才算失效
+  feeStore('code', null); feeStore('on','0');
+  FEE_ON = false; FEE_AUDIENCE = 'none';
   updateFeeSw();
 }
 function updateFeeSw(){
@@ -318,11 +353,13 @@ function bgRefresh(){
         const newTs = Date.parse(next.updatedAt||0)||0;
         const curTs = Date.parse((DB&&DB.updatedAt)||0)||0;
         if(JSON.stringify(next) !== JSON.stringify(DB)){
-          DB = next; applyDB(); syncFeeState(); render();
+          DB = next; applyDB(); render();
           if(newTs > curTs){
             try{ showUpdateToast('数据已更新 · v' + (next.updatedAt||'').slice(0,16).replace('T',' ')); }catch(e){}
           }
         }
+        syncFeeState();   // 每次拿到云端数据都重校验一次「记住的密码」，确保免密打开也生效
+        render();
       }
     }catch(e){}
     setTimeout(bgRefresh, 30000);
@@ -566,12 +603,12 @@ const feeSw = document.getElementById('feeSw');
 feeSw.addEventListener('click', ()=>{
   if(FEE_ON){
     FEE_ON = false;
-    localStorage.setItem('fxy_fee_on','0');
+    feeStore('on','0');          // 只关显示，密码继续记住
     updateFeeSw(); render(); return;
   }
-  const saved = localStorage.getItem('fxy_fee_code')||'';
+  const saved = feeLoad('code')||'';
   if(saved && validCode(saved)){
-    FEE_ON = true; localStorage.setItem('fxy_fee_on','1');
+    FEE_ON = true; feeStore('on','1');
     updateFeeSw(); render(); return;
   }
   feeSw.classList.add('pending');
@@ -605,8 +642,8 @@ async function doFeeOk(){
     if(okBtn){ okBtn.disabled=false; okBtn.style.opacity=''; }
   }
   if(aud){
-    localStorage.setItem('fxy_fee_code', v);
-    localStorage.setItem('fxy_fee_on','1');
+    feeStore('code', v);
+    feeStore('on','1');
     FEE_ON = true;
     FEE_AUDIENCE = aud;
     feeSw.classList.remove('pending');
