@@ -1023,16 +1023,40 @@ async function sbLoad(){
 async function pushToSupabase(){
   const c = sbCfgAdmin();
   if(!c.url || !c.key) throw new Error('未配置 Supabase');
-  const r = await fetch(c.url.replace(/\/+$/,'')+'/rest/v1/'+(c.table||'catalog')+'?id=eq.1', {
-    method:'PATCH',
-    headers:sbHeaders(c,true),
-    body:JSON.stringify({data:await buildData(),updated_at:new Date().toISOString()})
+  const data = await buildData();
+  const base = c.url.replace(/\/+$/,'');
+  const wk = writeKey();
+  // ① 优先走「带密钥校验的写入函数」——数据库加锁后这是唯一写入通道
+  if(wk){
+    let fallback = true;
+    try{
+      const r1 = await fetch(base+'/rest/v1/rpc/save_catalog', {
+        method:'POST', headers:sbHeaders(c,true),
+        body:JSON.stringify({p_key:wk, p_data:data})
+      });
+      if(r1.ok) return true;
+      const t1 = await r1.text();
+      if(r1.status !== 404 && !/save_catalog|not find|does not exist/i.test(t1)){
+        fallback = false;
+        if(/invalid write key/i.test(t1)) throw new Error('同步密钥不对：请检查登录页填的「同步密钥」');
+        if(r1.status===401 || r1.status===403 || /permission denied/i.test(t1))
+          throw new Error('没有写入权限：请检查「同步密钥」是否正确');
+        throw new Error((t1||'').slice(0,150) || ('HTTP '+r1.status));
+      }
+    }catch(e){
+      if(e && e.message && /密钥|权限/.test(e.message)) throw e;
+    }
+    if(!fallback) return true;
+  }
+  // ② 回退：直接 PATCH（数据库还没加锁时）
+  const r = await fetch(base+'/rest/v1/'+(c.table||'catalog')+'?id=eq.1', {
+    method:'PATCH', headers:sbHeaders(c,true),
+    body:JSON.stringify({data:data, updated_at:new Date().toISOString()})
   });
   if(!r.ok){
     const t=await r.text();
     if(r.status===401 || r.status===403 || /row-level security|permission denied/i.test(t||'')){
-      setSbJwt(null);
-      throw new Error('没有写入权限：请在登录页填入「同步密钥」后重新登录（安全策略已改为「只能读，写入需密钥」）');
+      throw new Error('没有写入权限：请在登录页填入正确的「同步密钥」后重新登录');
     }
     throw new Error((t||'').slice(0,150)||('HTTP '+r.status));
   }
