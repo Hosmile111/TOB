@@ -3,6 +3,11 @@
 <head>
 <!-- WB_CACHE: v2026-09-12-1315 — 按需求改为「不记住密码」：每次打开、每次关掉再开都要重新输密码(仅内存保存) -->
 <meta charset="UTF-8">
+<!-- 安全策略：限制页面只能加载自身与 Supabase 的资源，阻止外部脚本注入/挂马 -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob: https://hrwezjngocxtlfsprmwk.supabase.co; connect-src 'self' https://hrwezjngocxtlfsprmwk.supabase.co; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="X-Content-Type-Options" content="nosniff">
+
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
@@ -190,6 +195,7 @@ header.site{background:var(--bg)}
 </div>
 
 <div class="wrap" id="app"><div class="loading">正在加载产品数据…</div></div>
+
 
 
 

@@ -3,6 +3,11 @@
 <head>
 <!-- WB_CACHE: v2026-09-12-1010 — 上传图规格 长边1400px/q0.80；加 no-cache 与规格提示（此前后台页面被浏览器缓存，导致上传仍按旧的 760px 压糊） -->
 <meta charset="UTF-8">
+<!-- 安全策略：限制页面只能加载自身与 Supabase 的资源，阻止外部脚本注入/挂马 -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob: https://hrwezjngocxtlfsprmwk.supabase.co; connect-src 'self' https://hrwezjngocxtlfsprmwk.supabase.co; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="X-Content-Type-Options" content="nosniff">
+
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
