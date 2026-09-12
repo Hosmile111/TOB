@@ -1058,7 +1058,7 @@ function renderPass(){
       const on = (x.enabled !== false);
       const aud = x.audience || 'both';
       h += '<div class="prow">'+
-           '<input class="pcode" data-pcode="'+i+'" value="'+esc(x.code)+'" maxlength="10" placeholder="可自定义">'+
+           '<input class="pcode" data-pcode="'+i+'" value="'+esc(x.code||'')+'" maxlength="12" placeholder="'+(x.code?'可自定义':'（已加密保存·如需修改请输入新密码）')+'" title="'+(x.code?'':'数据里只保存了哈希，明文只在这台设备上；换设备请重新输入一次')+'">'+
            '<input class="plabel" data-pi="'+i+'" placeholder="人群备注（如：中介A组）" value="'+esc(x.label||'')+'">'+
            '<select class="paud" data-paud="'+i+'">'+
              '<option value="both"'+(aud==='both'?' selected':'')+'>全部</option>'+
@@ -1079,7 +1079,7 @@ function renderPass(){
 $('#passBtn').onclick=()=>{ ensurePass(); renderPass(); $('#passStatus').textContent=''; $('#passModal').style.display='flex'; };
 $('#passClose').onclick=()=>{ $('#passModal').style.display='none'; };
 $('#passModal').addEventListener('click',e=>{ if(e.target.id==='passModal') $('#passModal').style.display='none'; });
-$('#passGen').onclick=()=>{
+$('#passGen').onclick=()=>{ setTimeout(saveCodesLocal,0);
   const arr=ensurePass();
   if(arr.length>=10){ toast('最多 10 组密码','err'); return; }
   arr.push({ id:'pc'+Date.now().toString(36), code:genPassCode(), label:'', enabled:true,
