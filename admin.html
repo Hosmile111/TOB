@@ -635,7 +635,7 @@ fileInput.addEventListener('change', async ()=>{
   fileInput.value='';
   if(!f||!pickKey) return;
   try{
-    toast('正在处理图片…');
+    toast('正在处理图片…（自动压到长边 1100px，文字保持清晰）');
     const b64 = await compress(f);
     const [cid,i]=pickKey.split('|');
     const c=DB.categories.find(x=>x.id===cid);
@@ -644,7 +644,10 @@ fileInput.addEventListener('change', async ()=>{
   }catch(err){ toast('上传失败：'+err.message,'err'); }
 });
 function pickImage(key){ pickKey=key; fileInput.click(); }
-function compress(file, maxSide=760, quality=0.74){
+/* 产品图上传：清晰优先——长边 1100px / 质量 0.80
+   前台卡片最大显示 380px 高，1100px 约是 3 倍，文字清晰；同时体积可控。
+   不要低于 900px / 0.75，否则截图里的小字会糊。 */
+function compress(file, maxSide=1100, quality=0.80){
   return new Promise((resolve,reject)=>{
     const fr=new FileReader();
     fr.onload=()=>{
