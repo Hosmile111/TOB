@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<!-- WB_CACHE: v2026-09-12-1605 — 费率加密已启用；查看密码哈希校验；后台写入改为带密钥的写入函数优先 -->
+<!-- WB_CACHE: v2026-09-12-1625 — 后台登录态记住30天(刷新不用重登/不用重填密钥) -->
 <meta charset="UTF-8">
 <!-- 安全策略：限制页面只能加载自身与 Supabase 的资源，阻止外部脚本注入/挂马 -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob: https://hrwezjngocxtlfsprmwk.supabase.co; connect-src 'self' https://hrwezjngocxtlfsprmwk.supabase.co; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'none'">
@@ -195,6 +195,7 @@ header.site{background:var(--bg)}
 </div>
 
 <div class="wrap" id="app"><div class="loading">正在加载产品数据…</div></div>
+
 
 
 
