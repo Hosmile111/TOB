@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<!-- WB_CACHE: v2026-09-11-2315 — 仅搜索行吸顶(大标题随页面滚动)、更新日期+刷新+费率同一排、费率解锁后排在产品名后同排 -->
+<!-- WB_CACHE: v2026-09-12-0815 — Supabase改为权威数据源(不再"谁先到用谁"导致旧版本)、返回目录移到费率开关后、点图放大；内嵌图外置 -->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
@@ -33,6 +33,13 @@ header.site{background:var(--bg)}
 .toolbar a{color:var(--muted);font-size:13px;text-decoration:none;border:1px solid var(--line);padding:9px 13px;border-radius:9px;white-space:nowrap}
 .toolbar a:hover{border-color:#1d4d8a;color:#1d4d8a}
 .updated{font-size:11.5px;color:#93a1b3;white-space:nowrap;margin-left:auto}
+/* 顶栏「返回目录」（在费率开关后面） */
+.toolbar-inner .back-btn{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--line);background:#fff;border-radius:10px;padding:9px 13px;font-size:13px;color:var(--muted);cursor:pointer;white-space:nowrap}
+.toolbar-inner .back-btn:hover{border-color:#1d4d8a;color:#1d4d8a}
+/* 点图放大 */
+.imgbox-mask{position:fixed;inset:0;background:rgba(10,16,26,.9);z-index:1000;display:flex;align-items:center;justify-content:center;padding:14px;cursor:zoom-out}
+.imgbox-mask img{max-width:100%;max-height:calc(100% - 34px);object-fit:contain;border-radius:8px;background:#fff;box-shadow:0 12px 40px rgba(0,0,0,.4)}
+.imgbox-mask .imgbox-tip{position:absolute;bottom:12px;left:0;right:0;text-align:center;color:#c9d4e2;font-size:12px;letter-spacing:.5px}
 
 .wrap{max-width:1240px;margin:0 auto;padding:22px 16px 60px}
 .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
@@ -65,7 +72,7 @@ header.site{background:var(--bg)}
 .prod-card:hover{box-shadow:0 6px 18px rgba(0,0,0,.10);border-color:#c8d6ea}
 /* 产品图：图框贴合图片自身比例（不再用固定宽度/4:3，彻底消除左右留白） */
 .prod-img{position:relative;width:fit-content;max-width:100%;min-width:160px;min-height:120px;margin:10px auto 0;padding:6px;background:#f6f8fb;border:1px solid #e6ecf3;border-radius:10px;display:flex;align-items:center;justify-content:center;overflow:hidden}
-.prod-img img{max-width:100%;max-height:380px;width:auto;height:auto;object-fit:contain;display:block;opacity:0;transition:opacity .25s;border-radius:6px}
+.prod-img img{max-width:100%;max-height:380px;width:auto;height:auto;object-fit:contain;display:block;opacity:0;transition:opacity .25s;border-radius:6px;cursor:zoom-in}
 .prod-img:not(.loading) img{opacity:1}
 .prod-img .ph{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;font-size:12px;color:#9aa7b8}
 .prod-img .ph i{width:22px;height:22px;border:2px solid #d8e0ea;border-top-color:#1d4d8a;border-radius:50%;animation:fspin .8s linear infinite}
@@ -158,7 +165,14 @@ header.site{background:var(--bg)}
     <span class="updated" id="updated"></span>
     <button type="button" id="refreshBtn" class="refresh-btn" title="强制从云端刷新数据">🔄</button>
     <button type="button" id="feeSw" class="fee-sw" aria-pressed="false" title="输入密码后显示费率"><span class="knob"></span></button>
+    <button type="button" id="backBtn" class="back-btn" style="display:none" title="返回目录">← 返回目录</button>
   </div>
+</div>
+
+<!-- 点图放大（保证压缩后的图片依然能看清内容） -->
+<div id="imgBox" class="imgbox-mask" style="display:none" role="dialog" aria-label="查看大图">
+  <img id="imgBoxImg" alt="产品图放大">
+  <span class="imgbox-tip">点击任意处关闭</span>
 </div>
 
 <div id="feeMask" class="fmask" style="display:none">
@@ -306,6 +320,14 @@ function showUpdateToast(msg){
   t.style.opacity='1';
   clearTimeout(t._h); t._h=setTimeout(()=>{ t.style.opacity='0'; }, 2500);
 }
+function showLoadTimeout(){
+  document.getElementById('app').innerHTML =
+    '<div class="err">数据加载超时：云端数据源与本地 catalog.json 都不可达<br><br>'+
+    '请检查网络后点下面的按钮重试。'+
+    '<div style="margin-top:12px"><button id="retryLoad" style="padding:9px 22px;border:1px solid #b82020;background:#fff;color:#b82020;border-radius:8px;font-size:13.5px;cursor:pointer">重新加载</button></div></div>';
+  const rb=document.getElementById('retryLoad');
+  if(rb) rb.onclick=()=>{ try{ localStorage.removeItem(CAT_CACHE_KEY); }catch(e){} location.reload(); };
+}
 async function load(){
   if(window.__CAT__){ DB = window.__CAT__; applyDB(); syncFeeState(); render(); return; }
 
@@ -317,28 +339,23 @@ async function load(){
     return;
   }
 
-  // 2) 并发：supabase + catalog.json，谁先到用谁
-  let resolved=false;
-  const tryUse = (d)=>{
-    if(resolved) return;
-    if(!d || !(d.categories||[]).length) return;
-    resolved=true;
-    DB = d; writeCatCache(d);
-    applyDB(); syncFeeState(); render();
-  };
-  loadSb().then(tryUse).catch(()=>{});
-  fetchJsonTimeout(API, 8000).then(tryUse).catch(()=>{});
-
-  // 3) 10s 兜底：两个数据源都不可达时给出可操作的「重新加载」
-  await new Promise(r=>setTimeout(r, 10000));
-  if(!resolved){
-    document.getElementById('app').innerHTML =
-      '<div class="err">数据加载超时：云端数据源与本地 catalog.json 都不可达<br><br>'+
-      '请检查网络后点下面的按钮重试。'+
-      '<div style="margin-top:12px"><button id="retryLoad" style="padding:9px 22px;border:1px solid #b82020;background:#fff;color:#b82020;border-radius:8px;font-size:13.5px;cursor:pointer">重新加载</button></div></div>';
-    const rb=document.getElementById('retryLoad');
-    if(rb) rb.onclick=()=>{ try{ localStorage.removeItem(CAT_CACHE_KEY); }catch(e){} location.reload(); };
-  }
+  // 2) Supabase 是权威数据源（后台改完就写在那里）→ 必须优先；
+  //    catalog.json 只在 Supabase 不可达时兜底。
+  //    注意：不能再「谁先到用谁」——那样本地的旧文件会盖掉线上最新数据，
+  //    表现就是「打开的不是最新版本、更新日期不是最新的」。
+  const timer = setTimeout(showLoadTimeout, 12000);
+  try{
+    let d = await loadSb().catch(()=>null);                       // 权威源（内部 8s 超时）
+    if(!d) d = await fetchJsonTimeout(API, 8000).catch(()=>null);  // 兜底：本地 catalog.json
+    if(d && (d.categories||[]).length){
+      clearTimeout(timer);
+      DB = d; writeCatCache(d);
+      applyDB(); syncFeeState(); render();
+      return;
+    }
+  }catch(e){}
+  clearTimeout(timer);
+  showLoadTimeout();
 }
 
 function matchP(p){
@@ -358,6 +375,9 @@ function go(p){ location.hash = '#/'+p; }
 
 function render(){
   const app = document.getElementById('app');
+  // 「返回目录」放在顶栏费率开关后面，只在分类详情页出现
+  const bb = document.getElementById('backBtn');
+  if(bb) bb.style.display = (view.name==='cat') ? 'inline-flex' : 'none';
   if(view.name==='cat'){
     const c = DB.categories.find(x=>x.id===view.id);
     if(c){ app.innerHTML = renderCat(c); bindImages(); return; }
@@ -410,8 +430,7 @@ function renderCat(c){
   const col = c.color || {};
   const style = '--c-dark:'+(col.dark||'#1d4d8a')+';--c-light:'+(col.light||'#dbe6f4')+
                 ';--c-sub:'+(col.sub||'#2a4f76');
-  let h = '<div class="detail-bar"><button class="back" data-go="home">← 返回目录</button></div>';
-  h += '<div class="detail-hd" style="'+style+'">'+(c.emoji?'<span class="emo">'+esc(c.emoji)+'</span>':'')+
+  let h = '<div class="detail-hd" style="'+style+'">'+(c.emoji?'<span class="emo">'+esc(c.emoji)+'</span>':'')+
        '<div><h2>'+esc(c.name)+'</h2><p>'+esc(c.tagline||'')+' · 共 '+c.products.length+' 款产品</p></div></div>';
 
   const list = c.products.filter(matchP);
@@ -437,7 +456,7 @@ function renderProd(p, c){
   let h = '<article class="prod-card" style="'+style+'">';
   if(p.image){
     h += '<div class="prod-img loading"><div class="ph"><i></i><span>图片加载中…</span></div>'+
-         '<img src="'+esc(p.image)+'" alt="'+esc(F(p.name||'产品图'))+'" loading="lazy" decoding="async"></div>';
+         '<img src="'+esc(p.image)+'" alt="'+esc(F(p.name||'产品图'))+'" loading="lazy" decoding="async" title="点击放大查看"></div>';
   }
   // 投保链接行：支持 QR 二维码 + URL，都为空则降级提示联系管理员
   const hasLink = !!(p.insureLink && p.insureLink.trim());
@@ -483,10 +502,22 @@ function renderProd(p, c){
 }
 
 document.addEventListener('click', e=>{
+  // 点产品图 → 放大查看（保证压缩后内容依然看得清）
+  const zoomImg = e.target.closest('.prod-img img');
+  if(zoomImg){
+    const box = document.getElementById('imgBox');
+    if(box){ document.getElementById('imgBoxImg').src = zoomImg.currentSrc || zoomImg.src; box.style.display='flex'; }
+    return;
+  }
+  // 点放大层任意处 → 关闭
+  const box = document.getElementById('imgBox');
+  if(box && box.style.display !== 'none'){ box.style.display='none'; return; }
+
   const card = e.target.closest('.cat-card');
   if(card){ go('cat/'+card.dataset.cat); return; }
   if(e.target.closest('[data-go="home"]')){ go('home'); return; }
 });
+document.getElementById('backBtn').onclick = () => go('home');
 
 let timer;
 document.getElementById('q').addEventListener('input', e=>{
