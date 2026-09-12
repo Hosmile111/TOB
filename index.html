@@ -191,6 +191,7 @@ header.site{background:var(--bg)}
 
 <div class="wrap" id="app"><div class="loading">正在加载产品数据…</div></div>
 
+
 <!--INLINE_START 内联配置与数据快照（由 build/inline_snapshot.py 生成，勿手改）-->
 <script>window.SUPABASE={
   url: 'https://hrwezjngocxtlfsprmwk.supabase.co',
@@ -343,20 +344,21 @@ function showLoadTimeout(){
   if(rb) rb.onclick=()=>{ try{ localStorage.removeItem(CAT_CACHE_KEY); }catch(e){} location.reload(); };
 }
 async function load(){
-  // 0) 内联数据快照：**零请求、立即渲染**（首页最快路径，防止因加载慢丢客户）
-  //    打开后立刻用快照出首屏，再在后台静默向 Supabase 拉最新版本无感替换
-  if(window.__CAT__ && (window.__CAT__.categories||[]).length){
-    DB = window.__CAT__;
-    applyDB(); syncFeeState(); render();
-    bgRefresh();
-    return;
-  }
-  if(window.__CAT__){ /* 快照为空，继续走网络 */ }
-
-  // 1) 本地缓存秒开
+  // 0) 零请求启动：在内联快照与本地缓存里挑「较新的那一个」直接渲染
+  //    内联快照 = 页面自带，任何网络都能立刻出首屏（防止因加载慢丢客户）
+  //    本地缓存 = 上次从 Supabase 拉到的最新版本（若比快照新就用它，避免闪一下旧数据）
+  //    渲染完立刻在后台静默向 Supabase 拉最新，有新版本再无感替换
+  const snap = (window.__CAT__ && (window.__CAT__.categories||[]).length) ? window.__CAT__ : null;
   const cached = readCatCache();
-  if(cached){
-    DB = cached; applyDB(); syncFeeState(); render();
+  let boot = null;
+  if(snap && cached){
+    const ts = d => Date.parse((d && d.updatedAt)||0)||0;
+    boot = ts(cached) > ts(snap) ? cached : snap;
+  }else{
+    boot = snap || cached;
+  }
+  if(boot){
+    DB = boot; applyDB(); syncFeeState(); render();
     bgRefresh();
     return;
   }
