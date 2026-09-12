@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<!-- WB_CACHE: v2026-09-12-0815 — Supabase改为权威数据源(不再"谁先到用谁"导致旧版本)、返回目录移到费率开关后、点图放大；内嵌图外置 -->
+<!-- WB_CACHE: v2026-09-12-0920 — 图片改为「卡片轻量图+点击高清图」双版本(卡片1200px/放大1400px)、放大层按1:1显示、高清图外置 -->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
@@ -36,10 +36,11 @@ header.site{background:var(--bg)}
 /* 顶栏「返回目录」（在费率开关后面） */
 .toolbar-inner .back-btn{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--line);background:#fff;border-radius:10px;padding:9px 13px;font-size:13px;color:var(--muted);cursor:pointer;white-space:nowrap}
 .toolbar-inner .back-btn:hover{border-color:#1d4d8a;color:#1d4d8a}
-/* 点图放大 */
-.imgbox-mask{position:fixed;inset:0;background:rgba(10,16,26,.9);z-index:1000;display:flex;align-items:center;justify-content:center;padding:14px;cursor:zoom-out}
-.imgbox-mask img{max-width:100%;max-height:calc(100% - 34px);object-fit:contain;border-radius:8px;background:#fff;box-shadow:0 12px 40px rgba(0,0,0,.4)}
-.imgbox-mask .imgbox-tip{position:absolute;bottom:12px;left:0;right:0;text-align:center;color:#c9d4e2;font-size:12px;letter-spacing:.5px}
+/* 点图放大：按**原始尺寸 1:1** 显示（不缩放），要读小字就靠这里 */
+.imgbox-mask{position:fixed;inset:0;background:rgba(10,16,26,.92);z-index:1000;overflow:auto;cursor:zoom-out;padding:10px;text-align:center}
+.imgbox-mask img{display:block;margin:0 auto;max-width:none;width:auto;height:auto;background:#fff;border-radius:6px;box-shadow:0 12px 40px rgba(0,0,0,.4)}
+.imgbox-mask .imgbox-tip{position:fixed;left:0;right:0;bottom:10px;text-align:center;color:#c9d4e2;font-size:12px;letter-spacing:.5px;pointer-events:none}
+@media(max-width:700px){.imgbox-mask img{max-width:100%}}
 
 .wrap{max-width:1240px;margin:0 auto;padding:22px 16px 60px}
 .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
@@ -169,10 +170,10 @@ header.site{background:var(--bg)}
   </div>
 </div>
 
-<!-- 点图放大（保证压缩后的图片依然能看清内容） -->
+<!-- 点图放大（按原图 1:1 显示，保证压缩后内容依然能看清） -->
 <div id="imgBox" class="imgbox-mask" style="display:none" role="dialog" aria-label="查看大图">
   <img id="imgBoxImg" alt="产品图放大">
-  <span class="imgbox-tip">点击任意处关闭</span>
+  <span class="imgbox-tip" id="imgBoxTip">点击任意处关闭</span>
 </div>
 
 <div id="feeMask" class="fmask" style="display:none">
@@ -455,8 +456,10 @@ function renderProd(p, c){
                 ';--c-sub:'+(col.sub||'#2a4f76');
   let h = '<article class="prod-card" style="'+style+'">';
   if(p.image){
+    // 卡片用轻量图（快）；点开时换成高清图（清晰）——高清图不点不下载
+    const fullAttr = (p.imageFull && p.imageFull !== p.image) ? ' data-full="'+esc(p.imageFull)+'"' : '';
     h += '<div class="prod-img loading"><div class="ph"><i></i><span>图片加载中…</span></div>'+
-         '<img src="'+esc(p.image)+'" alt="'+esc(F(p.name||'产品图'))+'" loading="lazy" decoding="async" title="点击放大查看"></div>';
+         '<img src="'+esc(p.image)+'"'+fullAttr+' alt="'+esc(F(p.name||'产品图'))+'" loading="lazy" decoding="async" title="点击放大查看"></div>';
   }
   // 投保链接行：支持 QR 二维码 + URL，都为空则降级提示联系管理员
   const hasLink = !!(p.insureLink && p.insureLink.trim());
@@ -502,11 +505,21 @@ function renderProd(p, c){
 }
 
 document.addEventListener('click', e=>{
-  // 点产品图 → 放大查看（保证压缩后内容依然看得清）
+  // 点产品图 → 放大查看（加载高清原图，按 1:1 显示，保证看得清）
   const zoomImg = e.target.closest('.prod-img img');
   if(zoomImg){
     const box = document.getElementById('imgBox');
-    if(box){ document.getElementById('imgBoxImg').src = zoomImg.currentSrc || zoomImg.src; box.style.display='flex'; }
+    if(box){
+      const im = document.getElementById('imgBoxImg');
+      const tip = document.getElementById('imgBoxTip');
+      const full = zoomImg.getAttribute('data-full') || zoomImg.currentSrc || zoomImg.src;
+      tip.textContent = '正在加载高清图…';
+      im.onload = ()=>{ tip.textContent = '点击任意处关闭'; };
+      im.onerror = ()=>{ tip.textContent = '高清图加载失败 · 点击关闭'; };
+      im.src = full;
+      box.style.display = 'block';
+      box.scrollTop = 0;
+    }
     return;
   }
   // 点放大层任意处 → 关闭
