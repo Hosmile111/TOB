@@ -202,6 +202,15 @@ button,input,textarea{font-family:inherit}
     <button id="passBtn">🔑 查看密码</button>
     <button id="logoutBtn">退出</button>
   </div>
+  <div id="feeKeyBar" style="display:none;padding:9px 16px;background:#fff8ec;border-bottom:1px solid #f0dcc0;font-size:12.5px;align-items:center;gap:8px;flex-wrap:wrap">
+    <b>🔐 费率已加密</b>
+    <span style="color:#7a5a1a">输入费率密码解锁后才能查看/编辑费率（密码只在本机内存，关掉页面即失效）：</span>
+    <input id="fkC" type="password" placeholder="渠道密码" style="width:104px;padding:5px 8px;border:1px solid #e2cfa8;border-radius:6px;font-size:12.5px">
+    <input id="fkA" type="password" placeholder="业务员密码" style="width:104px;padding:5px 8px;border:1px solid #e2cfa8;border-radius:6px;font-size:12.5px">
+    <input id="fkL" type="password" placeholder="客户密码" style="width:104px;padding:5px 8px;border:1px solid #e2cfa8;border-radius:6px;font-size:12.5px">
+    <button id="fkGo" style="padding:5px 12px;border:1px solid #d99a2b;background:#fff;border-radius:6px;font-size:12.5px;cursor:pointer">解锁费率</button>
+    <span id="fkMsg" style="color:#0f7b4f"></span>
+  </div>
   <div class="main">
     <nav class="side" id="side"><div class="st">产品分类</div></nav>
     <div class="content" id="content"></div>
@@ -303,7 +312,30 @@ async function ensureDefaultPw(){
 function getPwHash(){ return localStorage.getItem(LS_PW) || ''; }
 
 function showLogin(){ $('#loginView').style.display='flex'; $('#adminView').style.display='none'; }
-function showAdmin(){ $('#loginView').style.display='none'; $('#adminView').style.display='block'; }
+function showAdmin(){ $('#loginView').style.display='none'; $('#adminView').style.display='block'; syncFeeKeyBar(); }
+/* 费率解锁条：仅当数据启用了加密时显示 */
+function syncFeeKeyBar(){
+  const bar=$('#feeKeyBar'); if(!bar) return;
+  bar.style.display = alLocked() ? 'flex' : 'none';
+  if(alLocked()){
+    const got = Object.keys(AL_FEE_KEYS).filter(k=>AL_FEE_KEYS[k]);
+    $('#fkMsg').textContent = got.length ? ('已解锁：'+got.map(t=>({channel:'渠道',agent:'业务员',client:'客户'}[t])).join('、')) : '';
+  }
+}
+$('#fkGo').onclick = async ()=>{
+  const btn=$('#fkGo'); btn.disabled=true; btn.textContent='解锁中…';
+  $('#fkMsg').textContent=''; $('#fkMsg').style.color='#b82020';
+  try{
+    let n=0;
+    if(await alUnlockOne('channel', $('#fkC').value.trim())) n++;
+    if(await alUnlockOne('agent',   $('#fkA').value.trim())) n++;
+    if(await alUnlockOne('client',  $('#fkL').value.trim())) n++;
+    $('#fkMsg').style.color='#0f7b4f';
+    $('#fkMsg').textContent = n ? '已解锁，费率可正常查看/编辑' : '密码不对，请检查';
+    renderContent();
+  }catch(e){ $('#fkMsg').textContent='解锁失败：'+e.message; }
+  finally{ btn.disabled=false; btn.textContent='解锁费率'; syncFeeKeyBar(); }
+};
 
 /* ===== Supabase 账号登录（写入权限收紧后，改数据必须用登录身份）=====
    安全模型：数据库策略改成「匿名只读 + 登录可写」后，
@@ -477,6 +509,7 @@ async function initAdmin(){
   cur = DB.categories[0] ? DB.categories[0].id : '';
   renderSide(); renderContent();
   dirty=false; $('#dirtyTip').textContent='';
+  restoreCodesLocal();
   updateSizeTip();
 }
 
@@ -561,11 +594,19 @@ function inp(label,f,v,key,cls,ph){
     (ph?' placeholder="'+esc(ph)+'"':'')+' value="'+esc(v)+'"></div>';
 }
 function fee3(p,key){
+  const cell=(t,ph,ti)=>{
+    const lock = alLocked() && !AL_FEE_KEYS[t];
+    const [plain] = AL_TYPES[t];
+    return '<input type="text" data-f="'+plain+'" data-key="'+esc(key)+'"'+
+      ' placeholder="'+(lock?'🔒 需先解锁费率':ph)+'"'+
+      ' value="'+(lock?'':esc(p[plain]||''))+'"'+(lock?' disabled':'')+
+      ' title="'+(lock?'费率已加密：请在上方输入费率密码解锁后再编辑':ti)+'">';
+  };
   return '<div class="f fee3"><label>渠道 / 业务员 / 客户（紧凑）</label>'+
     '<div class="fee3-row">'+
-    '<input type="text" data-f="feeChannel" data-key="'+esc(key)+'" placeholder="渠道 如 23%" value="'+esc(p.feeChannel||'')+'" title="渠道费用（填此项会自动算 业务员=渠道-5、客户=业务员-3）">'+
-    '<input type="text" data-f="feeAgent"   data-key="'+esc(key)+'" placeholder="业务员 如 18%" value="'+esc(p.feeAgent||'')+'"   title="业务员费用（自动=渠道-5，可自由改）">'+
-    '<input type="text" data-f="feeClient"  data-key="'+esc(key)+'" placeholder="客户 如 15%" value="'+esc(p.feeClient||'')+'"  title="客户费用（自动=业务员-3，可自由改）">'+
+    cell('channel','渠道 如 23%','渠道费用（填此项会自动算 业务员=渠道-5、客户=业务员-3）')+
+    cell('agent','业务员 如 18%','业务员费用（自动=渠道-5，可自由改）')+
+    cell('client','客户 如 15%','客户费用（自动=业务员-3，可自由改）')+
     '</div></div>';
 }
 function ta(label,f,v,key,cls){
@@ -679,7 +720,8 @@ document.addEventListener('input', e=>{
   const [cid,i]=el.dataset.key.split('|');
   const c=DB.categories.find(x=>x.id===cid);
   if(c && c.products[+i]){ c.products[+i][el.dataset.f]=el.value; markDirty();
-    if(el.dataset.f==='feeChannel') fillFromChannel(el); }
+    if(el.dataset.f==='feeChannel') fillFromChannel(el);
+    alSealProduct(c.products[+i]); }
 });
 document.addEventListener('change', e=>{
   const el=e.target.closest('[data-f]');
@@ -689,6 +731,7 @@ document.addEventListener('change', e=>{
   if(c && c.products[+i]){ c.products[+i][el.dataset.f]=el.value; markDirty(); renderSide();
     if(el.dataset.f==='feeAgent'||el.dataset.f==='feeClient') refillOnEmpty(el);
     clampNegative(el);
+    alSealProduct(c.products[+i]);
   }
 });
 
@@ -794,15 +837,89 @@ function download(text, name, type){
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name;
   document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(a.href);
 }
-function buildData(){
-  return { version:(DB.version||1), updatedAt:new Date().toISOString(),
-           categories:DB.categories, viewPasscodes:(DB.viewPasscodes||[]),
-           adminPassHash:(DB.adminPassHash||''), source:'static-admin-export' };
+/* ===== 费率加密（启用后：密码只上哈希、费率只上密文）===== */
+let AL_FEE_KEYS = {};                                   // {channel/agent/client: CryptoKey} 仅内存
+function alB64(b){ try{ return Uint8Array.from(atob(b), c=>c.charCodeAt(0)); }catch(e){ return null; } }
+async function alDerive(code, type){
+  const saltB64=(DB&&DB.feeSalt)||''; if(!saltB64) return null;
+  const salt=alB64(saltB64); if(!salt) return null;
+  const extra=new TextEncoder().encode('|'+type);
+  const merged=new Uint8Array(salt.length+extra.length); merged.set(salt,0); merged.set(extra,salt.length);
+  const base=await crypto.subtle.importKey('raw', new TextEncoder().encode(String(code)),'PBKDF2',false,['deriveKey']);
+  return crypto.subtle.deriveKey({name:'PBKDF2',salt:merged,iterations:150000,hash:'SHA-256'},
+         base,{name:'AES-GCM',length:256},false,['decrypt','encrypt']);
+}
+async function alDec(key,b64){ try{ const raw=alB64(b64); if(!raw||raw.length<14) return null;
+  return new TextDecoder().decode(await crypto.subtle.decrypt({name:'AES-GCM',iv:raw.slice(0,12)},key,raw.slice(12))); }catch(e){ return null; } }
+async function alEnc(key,text){
+  const iv=crypto.getRandomValues(new Uint8Array(12));
+  const ct=await crypto.subtle.encrypt({name:'AES-GCM',iv:iv},key,new TextEncoder().encode(String(text)));
+  const all=new Uint8Array(iv.length+ct.byteLength); all.set(iv,0); all.set(new Uint8Array(ct),iv.length);
+  let str=''; for(let i=0;i<all.length;i++) str+=String.fromCharCode(all[i]);
+  return btoa(str);
+}
+const AL_TYPES={channel:['feeChannel','feeChannelEnc'],agent:['feeAgent','feeAgentEnc'],client:['feeClient','feeClientEnc']};
+async function alUnlockOne(type, code){
+  if(!code) return false;
+  if(!(DB&&DB.feeSalt)) { AL_FEE_KEYS[type]='plain'; return true; }   // 未启用加密
+  const key=await alDerive(code,type); if(!key) return false;
+  AL_FEE_KEYS[type]=key;
+  const [plain,enc]=AL_TYPES[type];
+  for(const c of DB.categories) for(const p of (c.products||[])){
+    if(p[enc]){ const v=await alDec(key,p[enc]); if(v!=null) p[plain]=v; }
+  }
+  return true;
+}
+function alLocked(){ return !!(DB && DB.feeSalt); }          // 是否启用了加密
+/* 修改费率时：立即加密进 Enc 字段（明文不上云） */
+async function alSealProduct(p){
+  if(!(DB&&DB.feeSalt)) return;
+  for(const t of ['channel','agent','client']){
+    const key=AL_FEE_KEYS[t]; if(!key||key==='plain') continue;
+    const [plain,enc]=AL_TYPES[t];
+    const v=p[plain];
+    if(v!=null && String(v).trim()!=='') p[enc]=await alEnc(key,String(v));
+    else delete p[enc];
+  }
+}
+/* 本机保存一份明文密码（发布时只上哈希，明文不出本机，后台才能继续看到自己的密码） */
+function saveCodesLocal(){
+  try{
+    const m={}; (DB.viewPasscodes||[]).forEach(x=>{ if(x.code) m[x.id]=x.code; });
+    localStorage.setItem('fxy_codes_local', JSON.stringify(m));
+  }catch(e){}
+}
+function restoreCodesLocal(){
+  try{
+    const m=JSON.parse(localStorage.getItem('fxy_codes_local')||'{}');
+    (DB.viewPasscodes||[]).forEach(x=>{ if(!x.code && m[x.id]) x.code=m[x.id]; });
+  }catch(e){}
+}
+async function buildData(){
+  const d = { version:(DB.version||1), updatedAt:new Date().toISOString(),
+              categories:DB.categories, viewPasscodes:(DB.viewPasscodes||[]),
+              adminPassHash:(DB.adminPassHash||''), source:'static-admin-export' };
+  if(DB && DB.feeSalt){
+    // ① 查看密码只上哈希（明文不出本机）
+    const list = DB.viewPasscodes||[];
+    d.viewPasscodes = await Promise.all(list.map(async x=>{
+      const y=Object.assign({},x);
+      if(x.code) y.codeHash = await sha256(DB.feeSalt + '|code|' + x.code);
+      delete y.code;
+      return y;
+    }));
+    // ② 费率只上密文（明文字段不上云）
+    d.categories = DB.categories.map(c=>Object.assign({},c,{
+      products:(c.products||[]).map(p=>{ const q=Object.assign({},p);
+        delete q.feeChannel; delete q.feeAgent; delete q.feeClient; return q; })
+    }));
+  }
+  return d;
 }
 $('#exportSingleBtn').onclick=async ()=>{
   try{
     toast('正在生成单文件版（内嵌图片）…');
-    const data=buildData();
+    const data=await buildData();
     // 把图片内联为 dataURL
     const tasks=[];
     data.categories.forEach(c=>c.products.forEach(p=>{
@@ -909,7 +1026,7 @@ async function pushToSupabase(){
   const r = await fetch(c.url.replace(/\/+$/,'')+'/rest/v1/'+(c.table||'catalog')+'?id=eq.1', {
     method:'PATCH',
     headers:sbHeaders(c,true),
-    body:JSON.stringify({data:buildData(),updated_at:new Date().toISOString()})
+    body:JSON.stringify({data:await buildData(),updated_at:new Date().toISOString()})
   });
   if(!r.ok){
     const t=await r.text();
@@ -984,7 +1101,7 @@ $('#passList').addEventListener('input',e=>{
   const el=e.target.closest('[data-pi]');
   if(el){ ensurePass()[+el.dataset.pi].label = el.value; markDirty(); return; }
   const pc=e.target.closest('[data-pcode]');
-  if(pc){
+  if(pc){ setTimeout(saveCodesLocal,0);
     // 密码可自定义：只保留数字，实时查重提示
     const digits = pc.value.replace(/\D/g,'');
     if(digits !== pc.value) pc.value = digits;

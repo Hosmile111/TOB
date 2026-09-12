@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<!-- WB_CACHE: v2026-09-12-1445 — 不记住密码；CSP安全策略；首页1请求极速；后台支持同步密钥写入 -->
+<!-- WB_CACHE: v2026-09-12-1505 — 支持费率加密解密(未启用时用明文,向后兼容)；查看密码支持哈希校验 -->
 <meta charset="UTF-8">
 <!-- 安全策略：限制页面只能加载自身与 Supabase 的资源，阻止外部脚本注入/挂马 -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob: https://hrwezjngocxtlfsprmwk.supabase.co; connect-src 'self' https://hrwezjngocxtlfsprmwk.supabase.co; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'none'">
@@ -202,6 +202,7 @@ header.site{background:var(--bg)}
 
 
 
+
 <!--INLINE_START 内联配置与数据快照（由 build/inline_snapshot.py 生成，勿手改）-->
 <script>window.SUPABASE={
   url: 'https://hrwezjngocxtlfsprmwk.supabase.co',
@@ -255,16 +256,32 @@ function clearLegacyFeeStore(){
   }catch(e){}
 }
 clearLegacyFeeStore();
-function passcodes(){ return (DB.viewPasscodes||[]).filter(x=>x && x.enabled && x.code); }
+function passcodes(){ return (DB.viewPasscodes||[]).filter(x=>x && x.enabled && (x.codeHash||x.code)); }
 function maskRate(s){
   // 遮罩任意位置的「数字%」模式 —— 未授权访客应看不到任何费率数字
   return String(s==null?'':s).replace(/\d+(?:\.\d+)?\s*%/g, '**%');
 }
 function F(s){ return FEE_ON ? s : maskRate(s); }
-// 校验密码并返回该组的 audience（'agent'/'client'/'both'），无效则 null
-function validCode(code){
+/* 查看密码：支持两种存法
+   · codeHash（推荐，数据里不出现明文密码）：salt + '|code|' + 密码 的 SHA-256
+   · code（旧数据明文，向后兼容） */
+async function sha256hex(str){
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(String(str)));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+async function codeHashOf(code){
+  const salt = (DB && DB.feeSalt) || '';
+  return await sha256hex(salt + '|code|' + String(code));
+}
+// 校验密码并返回该组的 audience（'channel'/'agent'/'client'/'both'），无效则 null
+async function validCode(code){
   if(!code) return null;
-  const m = passcodes().find(x=>String(x.code)===String(code));
+  const list = passcodes();
+  const hit = list.find(x => x.code && String(x.code) === String(code));
+  if(hit) return hit.audience || 'both';                    // 旧明文数据
+  if(!(DB && DB.feeSalt)) return null;
+  const h = await codeHashOf(code);
+  const m = list.find(x => x.codeHash && x.codeHash === h);
   return m ? (m.audience || 'both') : null;
 }
 // 抽取值：FEE_ON + audience 都允许才返回真实文本，否则空字符串（外层 row 用 is-hidden 占位）
@@ -274,17 +291,72 @@ function F2(field, s){
   if(FEE_AUDIENCE==='both' || FEE_AUDIENCE===field) return s;
   return '';
 }
-function revalidateFee(){
+async function revalidateFee(){
   // 数据更新后：只校验「本次会话已输入的密码」是否仍有效；不做任何持久化
   if(!FEE_CODE){ FEE_ON = false; FEE_AUDIENCE = 'none'; updateFeeSw(); return; }
-  const aud = validCode(FEE_CODE);
-  if(aud){ FEE_ON = true; FEE_AUDIENCE = aud; }
-  else { FEE_CODE = ''; FEE_ON = false; FEE_AUDIENCE = 'none'; }
+  const aud = await validCode(FEE_CODE);
+  if(aud){ FEE_ON = true; FEE_AUDIENCE = aud; unlockFee(FEE_CODE).then(()=>render()); }
+  else { FEE_CODE = ''; FEE_ON = false; FEE_AUDIENCE = 'none'; FEE_PLAIN = {}; FEE_KEYLIST = null; }
   updateFeeSw();
 }
+
+/* ===== 费率加密（可选开关）：数据里存的是密文，只有输入正确密码后才在前台解密显示 =====
+   加密方式：AES-GCM，密钥由「密码 + 全局盐 + 费率类型」经 PBKDF2-SHA256(15万次) 派生。
+   数据里若没有 feeSalt，说明还没启用加密 → 自动回退用明文字段（向后兼容）。 */
+let FEE_KEYLIST = null;      // 本次会话解出的密钥（仅内存，不持久化）
+let FEE_PLAIN = {};          // { '<产品id>|<类型>' : 明文 }
+const FEE_FIELD = {channel:'feeChannelEnc', agent:'feeAgentEnc', client:'feeClientEnc'};
+const FEE_RAW   = {channel:'feeChannel',    agent:'feeAgent',    client:'feeClient'};
+function b64bytes(b){ try{ return Uint8Array.from(atob(b), c=>c.charCodeAt(0)); }catch(e){ return null; } }
+async function deriveFeeKey(code, type){
+  const saltB64 = (DB && DB.feeSalt) || '';
+  if(!saltB64) return null;
+  const salt = b64bytes(saltB64); if(!salt) return null;
+  const extra = new TextEncoder().encode('|' + type);
+  const merged = new Uint8Array(salt.length + extra.length);
+  merged.set(salt, 0); merged.set(extra, salt.length);
+  const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(String(code)), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey({name:'PBKDF2', salt:merged, iterations:150000, hash:'SHA-256'},
+                                 base, {name:'AES-GCM', length:256}, false, ['decrypt']);
+}
+async function decStr(key, b64){
+  try{
+    const raw = b64bytes(b64); if(!raw || raw.length < 14) return null;
+    const pt = await crypto.subtle.decrypt({name:'AES-GCM', iv:raw.slice(0,12)}, key, raw.slice(12));
+    return new TextDecoder().decode(pt);
+  }catch(e){ return null; }
+}
+async function unlockFee(code){
+  const aud = await validCode(code);
+  if(!aud) return null;
+  FEE_KEYLIST = null; FEE_PLAIN = {};
+  if(!(DB && DB.feeSalt)) return aud;                 // 还没启用加密 → 直接读明文
+  const types = aud==='both' ? ['channel','agent','client'] : [aud];
+  const keys = {};
+  for(const t of types){ try{ keys[t] = await deriveFeeKey(code, t); }catch(e){} }
+  FEE_KEYLIST = keys;
+  for(const c of (DB.categories||[])){
+    for(const p of (c.products||[])){
+      for(const t of types){
+        const enc = p[FEE_FIELD[t]];
+        if(enc && keys[t]){
+          const v = await decStr(keys[t], enc);
+          if(v != null) FEE_PLAIN[p.id+'|'+t] = v;
+        }
+      }
+    }
+  }
+  return aud;
+}
+function feeVal(p, t){
+  const k = p.id+'|'+t;
+  if(FEE_PLAIN[k] != null) return FEE_PLAIN[k];
+  return p[FEE_RAW[t]];
+}
 function hardLockFee(){
-  // 每次打开平台都从这里开始：锁定，并清掉本机可能残留的密码
+  // 每次打开平台都从这里开始：锁定，并清掉本机可能残留的密码与已解密的费率
   FEE_CODE = ''; FEE_ON = false; FEE_AUDIENCE = 'none';
+  FEE_PLAIN = {}; FEE_KEYLIST = null;
   clearLegacyFeeStore();
   updateFeeSw();
 }
@@ -535,9 +607,9 @@ function renderProd(p, c){
   const feeVals = [];
   if(FEE_ON){
     const rowVis = f => FEE_AUDIENCE==='both' || FEE_AUDIENCE===f;
-    if(rowVis('channel') && p.feeChannel) feeVals.push(p.feeChannel);
-    if(rowVis('agent')   && p.feeAgent)   feeVals.push(p.feeAgent);
-    if(rowVis('client')  && p.feeClient)  feeVals.push(p.feeClient);
+    if(rowVis('channel')){ const v = feeVal(p,'channel'); if(v) feeVals.push(v); }
+    if(rowVis('agent'))  { const v = feeVal(p,'agent');   if(v) feeVals.push(v); }
+    if(rowVis('client')) { const v = feeVal(p,'client');  if(v) feeVals.push(v); }
   }
   if(ins || feeVals.length){
     h += '<div class="name-row">';
@@ -616,7 +688,7 @@ async function doFeeOk(){
   const msg=document.getElementById('feeMsg');
   const okBtn=document.getElementById('feeOk');
   if(!v){ msg.textContent='请输入密码'; return; }
-  let aud = validCode(v);
+  let aud = await validCode(v);
   let netFail=false;
   if(!aud){
     // 本地缓存可能过期（后台刚生成了新密码）：拉一次线上最新数据重试（有 8 秒硬超时，不会一直卡）
@@ -624,12 +696,13 @@ async function doFeeOk(){
     if(okBtn){ okBtn.disabled=true; okBtn.style.opacity='.6'; }
     try{
       const fresh = await loadSb();
-      if(fresh){ DB = fresh; writeCatCache(fresh); applyDB(); aud = validCode(v); }
+      if(fresh){ DB = fresh; writeCatCache(fresh); applyDB(); aud = await validCode(v); }
       else netFail = true;
     }catch(e){ netFail = true; }
     if(okBtn){ okBtn.disabled=false; okBtn.style.opacity=''; }
   }
   if(aud){
+    await unlockFee(v);      // 若费率已加密，这里用密码解出明文（未加密时是空操作）
     FEE_CODE = v;            // 仅本次页面会话有效，不落盘
     FEE_ON = true;
     FEE_AUDIENCE = aud;
