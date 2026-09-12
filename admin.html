@@ -1,8 +1,12 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
+<!-- WB_CACHE: v2026-09-12-1010 — 上传图规格 长边1400px/q0.80；加 no-cache 与规格提示（此前后台页面被浏览器缓存，导致上传仍按旧的 760px 压糊） -->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>后台 · 非车险产品浏览目录</title>
 <link rel="preconnect" href="https://hrwezjngocxtlfsprmwk.supabase.co" crossorigin>
 <link rel="dns-prefetch" href="https://hosmile111.github.io">
@@ -178,6 +182,7 @@ button,input,textarea{font-family:inherit}
     <h1>⚙ 产品后台管理</h1>
     <span class="dirty" id="dirtyTip"></span>
     <span class="dirty" id="sizeTip"></span>
+    <span class="dirty" id="imgSpec" title="换图时会按这个规格压缩，保证前台清晰">图片 长边1400px·q0.80</span>
     <span class="spacer"></span>
     <button id="reloadBtn">🔄 恢复云端版本</button>
     <button id="saveBtn">💾 保存并同步</button>
@@ -635,26 +640,30 @@ fileInput.addEventListener('change', async ()=>{
   fileInput.value='';
   if(!f||!pickKey) return;
   try{
-    toast('正在处理图片…（自动压到长边 1200px，文字保持清晰）');
-    const b64 = await compress(f);
+    toast('正在处理图片…（自动压到长边 1400px，文字保持清晰）');
+    const r = await compress(f);
     const [cid,i]=pickKey.split('|');
     const c=DB.categories.find(x=>x.id===cid);
-    if(c && c.products[+i]){ c.products[+i].image=b64; c.products[+i].imageFull=b64; markDirty(); renderSide(); renderContent(); }
-    toast('图片已替换（本机保存）','ok');
+    if(c && c.products[+i]){
+      c.products[+i].image=r.url; c.products[+i].imageFull=r.url;
+      markDirty(); renderSide(); renderContent();
+      toast('已换成 '+r.w+'×'+r.h+'（原图 '+r.srcW+'×'+r.srcH+'，约 '+Math.round(r.url.length*0.75/1024)+'KB）','ok');
+    }
   }catch(err){ toast('上传失败：'+err.message,'err'); }
 });
 function pickImage(key){ pickKey=key; fileInput.click(); }
-/* 产品图上传：清晰优先——长边 1200px / 质量 0.80
-   前台卡片最大显示 380px 高，在 3 倍屏上约需 1140px，1200px 刚好够清晰。
-   同时 1200px 也够在「点图放大」里按 1:1 看清文字。
-   不要低于 900px / 0.75，否则截图里的小字会糊。 */
-function compress(file, maxSide=1200, quality=0.80){
+/* 产品图上传：清晰优先——长边 1400px / 质量 0.80
+   前台卡片最大显示 380px 高，在 3 倍屏上约需 1140px；1400px 留足余量，
+   在「点图放大」里也能按 1:1 看清文字。不要低于 900px / 0.75，否则截图小字会糊。
+   返回 {url, w, h, srcW, srcH}，便于提示里显示实际尺寸。 */
+function compress(file, maxSide=1400, quality=0.80){
   return new Promise((resolve,reject)=>{
     const fr=new FileReader();
     fr.onload=()=>{
       const img=new Image();
       img.onload=()=>{
-        let w=img.width,h=img.height;
+        const srcW=img.width, srcH=img.height;
+        let w=srcW,h=srcH;
         if(Math.max(w,h)>maxSide){
           if(w>=h){ h=Math.round(h*maxSide/w); w=maxSide; }
           else { w=Math.round(w*maxSide/h); h=maxSide; }
@@ -663,7 +672,7 @@ function compress(file, maxSide=1200, quality=0.80){
         const ctx=cv.getContext('2d');
         ctx.fillStyle='#fff'; ctx.fillRect(0,0,w,h);
         ctx.drawImage(img,0,0,w,h);
-        resolve(cv.toDataURL('image/jpeg',quality));
+        resolve({url:cv.toDataURL('image/jpeg',quality), w:w, h:h, srcW:srcW, srcH:srcH});
       };
       img.onerror=()=>reject(new Error('图片读取失败'));
       img.src=fr.result;
