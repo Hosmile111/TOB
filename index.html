@@ -267,15 +267,22 @@ function maskRate(s){
 }
 function F(s){ return FEE_ON ? s : maskRate(s); }
 /* 查看密码：支持两种存法
-   · codeHash（推荐，数据里不出现明文密码）：salt + '|code|' + 密码 的 SHA-256
+   · codeHash（推荐，数据里不出现明文密码）：PBKDF2(15万次)+salt 派生，格式 v2:<hashB64>
    · code（旧数据明文，向后兼容） */
 async function sha256hex(str){
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(String(str)));
   return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
 }
+// 查看密码哈希：PBKDF2(15万次)+feeSalt，格式 v2:<hashB64>（与费用解密同强度，公开也无法离线爆破）
 async function codeHashOf(code){
-  const salt = (DB && DB.feeSalt) || '';
-  return await sha256hex(salt + '|code|' + String(code));
+  const saltB64 = (DB && DB.feeSalt) || '';
+  if(!saltB64) return null;
+  const salt = b64bytes(saltB64); if(!salt) return null;
+  const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(String(code)), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits({name:'PBKDF2', salt:salt, iterations:150000, hash:'SHA-256'}, base, 256);
+  const bytes = new Uint8Array(bits);
+  let s=''; for(let i=0;i<bytes.length;i++) s+=String.fromCharCode(bytes[i]);
+  return 'v2:' + btoa(s);
 }
 // 校验密码并返回该组的 audience（'channel'/'agent'/'client'/'both'），无效则 null
 async function validCode(code){
@@ -284,8 +291,11 @@ async function validCode(code){
   const hit = list.find(x => x.code && String(x.code) === String(code));
   if(hit) return hit.audience || 'both';                    // 旧明文数据
   if(!(DB && DB.feeSalt)) return null;
-  const h = await codeHashOf(code);
-  const m = list.find(x => x.codeHash && x.codeHash === h);
+  const h2 = await codeHashOf(code);                        // 新 PBKDF2 哈希
+  const h1 = await sha256hex((DB.feeSalt) + '|code|' + String(code));  // 旧 sha256 兼容
+  const m = list.find(x => x.codeHash && (
+       (x.codeHash.startsWith('v2:') ? x.codeHash===h2 : x.codeHash===h1)
+  ));
   return m ? (m.audience || 'both') : null;
 }
 // 抽取值：FEE_ON + audience 都允许才返回真实文本，否则空字符串（外层 row 用 is-hidden 占位）

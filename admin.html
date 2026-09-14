@@ -304,9 +304,38 @@ async function sha256(s){
   const buf=await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
   return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,'0')).join('');
 }
+/* 后台密码哈希：PBKDF2(15万次)+随机盐，格式 v2|<saltB64>|<hashB64>。
+   相比原无盐 sha256，即使哈希泄露到公开 catalog 也无法离线爆破。兼容旧 64-hex sha256 自动迁移。 */
+async function adminHash(p){
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(String(p)), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits({name:'PBKDF2', salt:salt, iterations:150000, hash:'SHA-256'}, base, 256);
+  const bytes = new Uint8Array(bits);
+  let s='', sb=''; for(let i=0;i<bytes.length;i++) s+=String.fromCharCode(bytes[i]);
+  for(let i=0;i<salt.length;i++) sb+=String.fromCharCode(salt[i]);
+  return 'v2|' + btoa(sb) + '|' + btoa(s);
+}
+async function adminVerify(p, stored){
+  if(!stored) return false;
+  if(stored.startsWith('v2|')){
+    const parts = stored.split('|');
+    if(parts.length!==3) return false;
+    const salt = Uint8Array.from(atob(parts[1]), c=>c.charCodeAt(0));
+    const exp  = Uint8Array.from(atob(parts[2]), c=>c.charCodeAt(0));
+    const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(String(p)), 'PBKDF2', false, ['deriveBits']);
+    const bits = await crypto.subtle.deriveBits({name:'PBKDF2', salt:salt, iterations:150000, hash:'SHA-256'}, base, 256);
+    const got = new Uint8Array(bits);
+    if(got.length!==exp.length) return false;
+    let ok=true; for(let i=0;i<got.length;i++) if(got[i]!==exp[i]) ok=false;
+    return ok;
+  }
+  if(/^[0-9a-f]{64}$/.test(stored)) return (await sha256(p)) === stored;  // 旧格式兼容
+  return false;
+}
+function adminIsLegacy(stored){ return !!stored && !stored.startsWith('v2|'); }
 async function ensureDefaultPw(){
   if(!localStorage.getItem(LS_PW)){
-    localStorage.setItem(LS_PW, await sha256(DEFAULT_PW));
+    localStorage.setItem(LS_PW, await adminHash(DEFAULT_PW));
   }
 }
 function getPwHash(){ return localStorage.getItem(LS_PW) || ''; }
@@ -408,52 +437,26 @@ async function doLogin(){
     if(u!=='seeyoulook@qq.com') throw new Error('账号或密码错误');
     btn.textContent='登录中…';
     await ensureDefaultPw();
-    const h=await sha256(p);
-    const localOK = (h===getPwHash());
-
+    const localOK = await adminVerify(p, getPwHash());
     if(localOK){
-      // 路径 A：本机 hash 一致，秒进（除非还没缓存就需要先加载数据，最多 2.5s）
+      // 升级本机旧哈希为 v2（PBKDF2+盐）
+      if(adminIsLegacy(getPwHash())){ try{ localStorage.setItem(LS_PW, await adminHash(p)); }catch(e){} }
       const cached = readACache();
       if(!cached){
         btn.textContent='载入数据…';
         await loadBaseData();
       }
       if(!(DB && (DB.categories||[]).length)){
-        // 仍未拿到，去 fetch（兜底）
         await loadBaseData();
       }
       saveSession();
       btn.textContent='登录成功';
       await initAdmin();
-      // 后台异步校验线上 hash（不阻塞登录）
-      // 策略：以本机为源头（用户在本机就是权威）。如果本机与线上不一致，把本机推到线上，
-      //       而不是反向覆盖本机——否则「修改了新密码」永远无法同步到所有设备
-      setTimeout(async()=>{
-        try{
-          const sb = await sbLoad();
-          if(sb && sb.adminPassHash && h !== sb.adminPassHash){
-            try{
-              DB.adminPassHash = h;
-              await pushToSupabase();
-              toast('⚠ 本机新密码还没同步到线上，已自动推回','ok');
-            }catch(e2){
-              toast('⚠ 本机新密码未同步到线上：'+e2.message+'，请点「💾 保存并同步」','err');
-            }
-          }
-        }catch(e){}
-      }, 200);
+      // 传统密码已改为纯本机校验，不再与云端同步 adminPassHash（消除公开可爆破点）
       return;
     }
-    // 路径 B：本机不匹配，需校验线上
-    btn.textContent='正在校验线上密码…';
-    await loadBaseData();
-    const online=(DB.adminPassHash||'');
-    if(!online || h !== online) throw new Error('密码错误');
-    // 同步到本机
-    localStorage.setItem(LS_PW, online);
-    saveSession();
-    btn.textContent='登录成功';
-    await initAdmin();
+    // 本机密码不匹配：云端账号登录已在前面处理；传统密码不再做线上校验
+    throw new Error('密码错误，或请使用云端账号登录');
   }catch(e){
     $('#loginErr').textContent=e.message; $('#loginErr').style.display='block';
   }finally{ btn.disabled=false; btn.textContent='登 录'; }
@@ -492,6 +495,17 @@ async function loadBaseData(){
   }
   return DB;
 }
+let _sanitizedAdminPw=false;
+async function sanitizeSecrets(){
+  if(_sanitizedAdminPw) return;
+  if(DB && DB.adminPassHash){
+    delete DB.adminPassHash;
+    _sanitizedAdminPw=true;
+    markDirty();
+    try{ await pushToSupabase(); toast('已自动移除公开数据中的后台密码哈希','ok'); }
+    catch(e){ _sanitizedAdminPw=false; }   // 推送失败（如无写入密钥）则下次再试
+  }
+}
 async function initAdmin(){
   if(!(DB.categories||[]).length){
     const cached=readACache();
@@ -525,6 +539,7 @@ async function initAdmin(){
   dirty=false; $('#dirtyTip').textContent='';
   restoreCodesLocal();
   updateSizeTip();
+  sanitizeSecrets();
 }
 
 /* ================= 渲染 ================= */
@@ -854,6 +869,15 @@ function download(text, name, type){
 /* ===== 费率加密（启用后：密码只上哈希、费率只上密文）===== */
 let AL_FEE_KEYS = {};                                   // {channel/agent/client: CryptoKey} 仅内存
 function alB64(b){ try{ return Uint8Array.from(atob(b), c=>c.charCodeAt(0)); }catch(e){ return null; } }
+// 查看密码哈希：PBKDF2(15万次)+feeSalt，格式 v2:<hashB64>。与费用解密同强度，公开也无法离线爆破。
+async function codeHashPbkdf2(code, saltB64){
+  const salt = alB64(saltB64); if(!salt) return null;
+  const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(String(code)), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits({name:'PBKDF2', salt:salt, iterations:150000, hash:'SHA-256'}, base, 256);
+  const bytes = new Uint8Array(bits);
+  let s=''; for(let i=0;i<bytes.length;i++) s+=String.fromCharCode(bytes[i]);
+  return 'v2:' + btoa(s);
+}
 async function alDerive(code, type){
   const saltB64=(DB&&DB.feeSalt)||''; if(!saltB64) return null;
   const salt=alB64(saltB64); if(!salt) return null;
@@ -912,13 +936,13 @@ function restoreCodesLocal(){
 async function buildData(){
   const d = { version:(DB.version||1), updatedAt:new Date().toISOString(),
               categories:DB.categories, viewPasscodes:(DB.viewPasscodes||[]),
-              adminPassHash:(DB.adminPassHash||''), source:'static-admin-export' };
+              source:'static-admin-export' };
   if(DB && DB.feeSalt){
-    // ① 查看密码只上哈希（明文不出本机）
+    // ① 查看密码只上哈希（明文不出本机）；哈希改用 PBKDF2(15万次)，公开 catalog 也无法离线爆破
     const list = DB.viewPasscodes||[];
     d.viewPasscodes = await Promise.all(list.map(async x=>{
       const y=Object.assign({},x);
-      if(x.code) y.codeHash = await sha256(DB.feeSalt + '|code|' + x.code);
+      if(x.code){ const h = await codeHashPbkdf2(x.code, DB.feeSalt); if(h) y.codeHash = h; }
       delete y.code;
       return y;
     }));
@@ -994,12 +1018,12 @@ $('#pwdBtn').onclick=async ()=>{
   if(newP!==newP2){ alert('两次输入不一致'); return; }
   try{
     if(!(DB.categories||[]).length) await loadBaseData();
-    const online=(DB.adminPassHash||'');
-    const oldH=await sha256(oldP);
-    if(online ? (oldH!==online) : (oldH!==getPwHash())){ alert('原密码错误'); return; }
-    const newHash=await sha256(newP);
+    const cur=getPwHash();
+    const oldOK = cur ? await adminVerify(oldP, cur) : false;
+    if(!oldOK){ alert('原密码错误'); return; }
+    const newHash=await adminHash(newP);
     localStorage.setItem(LS_PW, newHash);
-    DB.adminPassHash = newHash;
+    // 不再把 adminPassHash 写入公开 catalog（改为纯本机口令）
     markDirty();
     try{
       await pushToSupabase();
