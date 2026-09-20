@@ -1132,8 +1132,8 @@ function ensurePass(){ if(!Array.isArray(DB.viewPasscodes)) DB.viewPasscodes=[];
 function genPassCode(){
   // 安全加固：查看口令同时用于派生费率加密密钥。原实现是 5~6 位纯数字、
   // 且用可预测的 Math.random 生成，组合空间仅约 100 万，可被瞬间枚举并解开费率密文。
-  // 改为密码学安全的 10 位大小写字母+数字（去掉易混淆的 0/O/1/l/I），组合空间约 5.6e17。
-  const A='ABCDEFGHJKMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+  // 改为密码学安全的 10 位大写字母+数字（去掉易混淆的 I/O/0/1）。统一大写，微信转发不会因大小写打错而失效；31^10≈8.2e14 组合，配合 PBKDF2(15万次) 无法离线爆破。
+  const A='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   const a=new Uint32Array(10);
   crypto.getRandomValues(a);
   let s='';
