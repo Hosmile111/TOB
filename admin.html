@@ -340,6 +340,29 @@ async function ensureDefaultPw(){
 }
 function getPwHash(){ return localStorage.getItem(LS_PW) || ''; }
 
+/* 安全加固：出厂默认口令（DEFAULT_PW）是写在源码里的公开值，任何人打开 admin.html
+   都能看到并用它登录。因此只要检测到当前仍是默认口令，登录后立即强制更换，
+   否则不允许继续使用后台。 */
+async function forceChangeDefaultPw(){
+  for(;;){
+    const np = window.prompt(
+      '⚠️ 安全提醒：当前使用的仍是出厂默认口令。该口令已公开在页面源码中，任何人都可登录后台。\n\n'+
+      '请立即设置新的后台密码（至少 8 位，且同时包含字母和数字）：');
+    if(np === null){
+      window.alert('为保障后台安全，必须修改默认口令后才能继续使用。');
+      continue;
+    }
+    if(String(np) === DEFAULT_PW){ window.alert('不能使用默认口令，请另设一个。'); continue; }
+    if(np.length < 8 || !/[A-Za-z]/.test(np) || !/\d/.test(np)){
+      window.alert('密码强度不足：至少 8 位，且需同时包含字母和数字。');
+      continue;
+    }
+    try{ localStorage.setItem(LS_PW, await adminHash(np)); }catch(e){}
+    toast('已更新后台密码，出厂默认口令已失效','ok');
+    return;
+  }
+}
+
 /* ===== 登录态：在本机记住 30 天，刷新不用重新登录 ===== */
 const LS_SESSION='fxy_admin_session';
 const SESSION_DAYS=30;
@@ -434,7 +457,8 @@ async function doLogin(){
       return;
     }
     // ② 回退：传统的管理员密码（尚未开启云端账号时仍可用）
-    if(u!=='seeyoulook@qq.com') throw new Error('账号或密码错误');
+    // 安全加固：账号名不再以明文写在源码里（任何人查看 admin.html 都会看到），改为比对哈希
+    if((await sha256(String(u).trim().toLowerCase())) !== '6a40e15577334a2bde9b447cc00e54a55f8aa2a05570568b82e220079e8b8fa5') throw new Error('账号或密码错误');
     btn.textContent='登录中…';
     await ensureDefaultPw();
     const localOK = await adminVerify(p, getPwHash());
@@ -453,6 +477,8 @@ async function doLogin(){
       btn.textContent='登录成功';
       await initAdmin();
       // 传统密码已改为纯本机校验，不再与云端同步 adminPassHash（消除公开可爆破点）
+      // 安全加固：仍在使用出厂默认口令的，登录后强制更换
+      if(await adminVerify(DEFAULT_PW, getPwHash())) await forceChangeDefaultPw();
       return;
     }
     // 本机密码不匹配：云端账号登录已在前面处理；传统密码不再做线上校验
@@ -1104,9 +1130,14 @@ async function pushToSupabase(){
 /* ================= 查看密码管理 ================= */
 function ensurePass(){ if(!Array.isArray(DB.viewPasscodes)) DB.viewPasscodes=[]; return DB.viewPasscodes; }
 function genPassCode(){
+  // 安全加固：查看口令同时用于派生费率加密密钥。原实现是 5~6 位纯数字、
+  // 且用可预测的 Math.random 生成，组合空间仅约 100 万，可被瞬间枚举并解开费率密文。
+  // 改为密码学安全的 10 位大小写字母+数字（去掉易混淆的 0/O/1/l/I），组合空间约 5.6e17。
+  const A='ABCDEFGHJKMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+  const a=new Uint32Array(10);
+  crypto.getRandomValues(a);
   let s='';
-  const len = 5 + Math.floor(Math.random()*2); // 5~6 位
-  for(let i=0;i<len;i++) s += String(Math.floor(Math.random()*10));
+  for(let i=0;i<10;i++) s += A[a[i] % A.length];
   return s;
 }
 function renderPass(){
