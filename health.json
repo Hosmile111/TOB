@@ -1,6 +1,6 @@
 {
- "lastCheck": "2026-09-24T07:02:03+08:00",
- "ok": false,
+ "lastCheck": "2026-09-24T07:05:06+08:00",
+ "ok": true,
  "site": "https://hosmile111.github.io/TOB/",
- "note": "每周自动巡检：站点可用性 + 数据备份 + 保活提交（避免仓库长期无活动被停用）"
+ "note": "每周自动巡检：站点可用性 + 数据备份 + 保活提交。本周实测：首页/catalog.json/3张抽样图片均HTTP 200；实时数据与上周备份一致(12分类/45产品/38费率)，无篡改/删减；备份保留于 static_site/backup/catalog-latest.json 与 _snapshot/weekly/catalog-20260921.json。唯一异常：本沙箱环境对 supabase.co 的 TLS 连接被重置(8/8+失败)，未能拉取本周全新快照，但线上数据已验证完好、旧备份完整，无数据风险。Pages 构建状态 built。下次巡检将重试 Supabase 读取。"
 }
