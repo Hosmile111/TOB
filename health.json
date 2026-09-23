@@ -1,6 +1,6 @@
 {
- "lastCheck": "2026-09-21T07:03:19+08:00",
- "ok": true,
+ "lastCheck": "2026-09-24T07:02:03+08:00",
+ "ok": false,
  "site": "https://hosmile111.github.io/TOB/",
  "note": "每周自动巡检：站点可用性 + 数据备份 + 保活提交（避免仓库长期无活动被停用）"
 }
